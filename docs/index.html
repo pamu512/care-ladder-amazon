@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Care Ladder - an OpenCV + Alexa+ care escalation for the Fire TV home. It confirms before it escalates, shows its work, and never calls emergency services on its own.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>Care Ladder · Confirm before escalate</title>
+<!--
+  Care Ladder product site for pamu512/care-ladder-amazon (Amazon Build, Ship, Shape).
+  Identity: Calm Care-Tech (warm dark, sage/amber/clay/slate).
+  Claims checked against main (A1-A4 family FSM + Alexa mobile caregiver) on 2026-09-29.
+  Screenshots: production Fire TV dashboard at 1280x720 from the running server.
+-->
+<style>
+  :root {
+    --bg: #24221E;
+    --bg-deep: #1E1C18;
+    --surface: #2E2B25;
+    --surface-2: #35322A;
+    --ink: #EFEAE2;
+    --ink-70: rgba(239,234,226,0.72);
+    --ink-55: rgba(239,234,226,0.58);
+    --ink-40: rgba(239,234,226,0.40);
+    --ink-25: rgba(239,234,226,0.25);
+    --line: rgba(239,234,226,0.10);
+    --line-strong: rgba(239,234,226,0.18);
+    --sage: #A8B5A0;
+    --sage-dim: rgba(168,181,160,0.14);
+    --amber: #D9A05B;
+    --amber-deep: #B98443;
+    --amber-dim: rgba(217,160,91,0.14);
+    --clay: #D98873;
+    --clay-dim: rgba(217,136,115,0.16);
+    --slate: #9DB0C7;
+    --slate-dim: rgba(157,176,199,0.13);
+    --r-lg: 18px;
+    --r-md: 13px;
+    --r-sm: 9px;
+    --font-sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg-deep);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: var(--amber-dim); color: var(--ink); }
+  a { color: inherit; }
+  img { max-width: 100%; display: block; }
+
+  .page { position: relative; overflow: hidden; }
+  /* atmosphere */
+  .atmo {
+    position: absolute; inset: 0; pointer-events: none; z-index: 0;
+    background:
+      radial-gradient(1100px 500px at 15% -5%, rgba(217,160,91,0.07), transparent 60%),
+      radial-gradient(900px 480px at 95% 30%, rgba(168,181,160,0.05), transparent 58%),
+      radial-gradient(1000px 600px at 50% 110%, rgba(157,176,199,0.04), transparent 60%);
+  }
+
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 0 clamp(20px, 4vw, 40px); position: relative; z-index: 1; }
+
+  /* ============ nav ============ */
+  .nav {
+    position: sticky; top: 0; z-index: 40;
+    background: color-mix(in srgb, var(--bg-deep) 82%, transparent);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-in { display: flex; align-items: center; gap: 14px; padding: 14px 0; }
+  .brand { display: flex; align-items: center; gap: 11px; text-decoration: none; }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 10px; flex: none;
+    background: linear-gradient(150deg, #D9A05B, #A8B5A0);
+    display: grid; place-items: center;
+  }
+  .brand-mark svg { width: 19px; height: 19px; stroke: #24221E; }
+  .brand-name { font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+  .nav-links { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+  .nav-links a {
+    text-decoration: none; color: var(--ink-55); font-size: 15px; font-weight: 550;
+    padding: 9px 14px; border-radius: 999px; transition: color .15s, background .15s;
+  }
+  .nav-links a:hover { color: var(--ink); background: rgba(239,234,226,0.05); }
+  .nav-cta {
+    background: var(--amber); color: #24221E !important; font-weight: 650;
+    padding: 9px 20px !important; border-radius: 999px;
+  }
+  .nav-cta:hover { background: #E3AD6C !important; }
+  @media (max-width: 720px) { .nav-links a:not(.nav-cta) { display: none; } }
+
+  /* ============ hero ============ */
+  .hero { padding: clamp(56px, 9vh, 96px) 0 clamp(40px, 6vh, 64px); }
+  .hero-grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); gap: clamp(28px, 4vw, 56px); align-items: center; }
+  .kicker {
+    display: inline-flex; align-items: center; gap: 9px;
+    font-family: var(--font-mono); font-size: 12.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--amber); padding: 7px 14px; border: 1px solid rgba(217,160,91,0.3); border-radius: 999px;
+    margin-bottom: 22px;
+  }
+  .kicker .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--amber); }
+  h1 {
+    font-size: clamp(38px, 5.4vw, 62px);
+    line-height: 1.04; letter-spacing: -0.028em; font-weight: 700;
+    margin-bottom: 20px;
+  }
+  h1 .accent { color: var(--amber); }
+  .hero-sub { font-size: clamp(17px, 1.7vw, 20px); color: var(--ink-70); max-width: 46ch; margin-bottom: 30px; }
+  .hero-sub b { color: var(--ink); font-weight: 650; }
+  .hero-ctas { display: flex; gap: 13px; flex-wrap: wrap; margin-bottom: 26px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px;
+    min-height: 52px; padding: 13px 28px; border-radius: 13px; border: none;
+    font-family: inherit; font-size: 16.5px; font-weight: 650; cursor: pointer;
+    text-decoration: none; transition: transform .14s, background .2s, border-color .2s;
+  }
+  .btn svg { width: 18px; height: 18px; }
+  .btn:active { transform: translateY(1px) scale(0.99); }
+  .btn-primary { background: var(--amber); color: #24221E; }
+  .btn-primary:hover { background: #E3AD6C; }
+  .btn-ghost { background: transparent; color: var(--ink); border: 1.5px solid var(--line-strong); }
+  .btn-ghost:hover { border-color: var(--ink-40); background: rgba(239,234,226,0.04); }
+  .hero-facts { display: flex; gap: 10px; flex-wrap: wrap; }
+  .fact-chip {
+    font-size: 13.5px; color: var(--ink-55);
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .fact-chip svg { width: 14px; height: 14px; stroke: var(--sage); }
+
+  /* hero visual: framed dashboard */
+  .hero-visual { position: relative; }
+  .tv-frame {
+    border-radius: 16px; overflow: hidden;
+    border: 1px solid var(--line-strong);
+    box-shadow: 0 30px 80px rgba(0,0,0,0.45), 0 4px 18px rgba(0,0,0,0.3);
+    background: var(--surface);
+  }
+  .tv-frame img { width: 100%; height: auto; }
+  .tv-caption {
+    margin-top: 14px; display: flex; align-items: center; gap: 10px;
+    font-size: 13.5px; color: var(--ink-40); font-family: var(--font-mono);
+  }
+  .tv-caption .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--sage); flex: none; }
+  .state-toggle {
+    position: absolute; top: 12px; left: 12px; display: flex; gap: 6px;
+    background: rgba(30,28,24,0.85); backdrop-filter: blur(8px);
+    border: 1px solid var(--line); border-radius: 999px; padding: 4px;
+  }
+  .state-toggle button {
+    border: none; background: transparent; color: var(--ink-55);
+    font-family: var(--font-mono); font-size: 11.5px; font-weight: 600; letter-spacing: 0.04em;
+    padding: 6px 12px; border-radius: 999px; cursor: pointer; transition: all .18s;
+  }
+  .state-toggle button.on { background: var(--amber); color: #24221E; }
+  .state-toggle button:not(.on):hover { color: var(--ink); }
+
+  /* ============ sections shared ============ */
+  section { padding: clamp(48px, 8vh, 84px) 0; position: relative; }
+  .sec-head { margin-bottom: clamp(28px, 4vh, 44px); }
+  .sec-label {
+    font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--amber); margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sec-label::after { content: ""; height: 1px; width: 44px; background: rgba(217,160,91,0.35); }
+  h2 { font-size: clamp(28px, 3.6vw, 40px); letter-spacing: -0.022em; line-height: 1.12; font-weight: 700; margin-bottom: 14px; }
+  .sec-sub { color: var(--ink-70); font-size: clamp(16px, 1.5vw, 18.5px); max-width: 58ch; }
+  .sec-sub b { color: var(--ink); font-weight: 650; }
+
+  /* ============ ladder section ============ */
+  .ladder-board { display: grid; gap: 10px; }
+  .rung {
+    display: grid; grid-template-columns: 52px 218px 1fr auto; gap: 18px; align-items: center;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: 16px 20px; transition: border-color .2s, transform .2s;
+  }
+  .rung:hover { border-color: var(--line-strong); transform: translateX(3px); }
+  .rung-num {
+    width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center;
+    font-family: var(--font-mono); font-weight: 600; font-size: 15px;
+    border: 1.5px solid var(--ink-25); color: var(--ink-55);
+  }
+  .rung:nth-child(1) .rung-num { border-color: var(--sage); color: var(--sage); background: var(--sage-dim); }
+  .rung:nth-child(2) .rung-num { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+  .rung:nth-child(3) .rung-num { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+  .rung:nth-child(4) .rung-num { border-color: var(--clay);  color: var(--clay);  background: var(--clay-dim); }
+  .rung:nth-child(5) .rung-num { border-color: var(--clay);  color: var(--clay);  background: var(--clay-dim); }
+  .rung-name { font-weight: 650; font-size: 16.5px; }
+  .rung-desc { color: var(--ink-55); font-size: 15px; }
+  .rung-tool {
+    font-family: var(--font-mono); font-size: 12px; color: var(--ink-40);
+    border: 1px solid var(--line); padding: 4px 10px; border-radius: 7px; white-space: nowrap;
+  }
+  .rung.emergency { border-style: dashed; border-color: rgba(217,136,115,0.4); }
+  .rung.emergency .rung-num { border-style: dashed; border-color: rgba(217,136,115,0.5); color: var(--clay); background: transparent; }
+  .rung.emergency .rung-name { color: var(--ink-55); }
+  .rung-note {
+    margin-top: 4px; grid-column: 2 / -1; font-size: 13.5px; color: var(--ink-40);
+    display: none;
+  }
+  .rung-note.show { display: block; }
+  .rung:hover .rung-note { display: block; }
+  @media (max-width: 860px) {
+    .rung { grid-template-columns: 44px 1fr; grid-template-rows: auto auto; }
+    .rung-desc { grid-column: 2; }
+    .rung-tool { display: none; }
+    .rung-note { grid-column: 1 / -1; }
+  }
+
+  /* ============ intent demo ============ */
+  .intent-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: clamp(22px, 3vw, 40px); align-items: start; }
+  .try-box {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+    padding: clamp(20px, 2.6vw, 28px);
+  }
+  .try-label { font-family: var(--font-mono); font-size: 11.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-40); margin-bottom: 10px; }
+  .try-input {
+    width: 100%; background: var(--bg-deep); border: 1.5px solid var(--line-strong); border-radius: var(--r-md);
+    color: var(--ink); font-family: var(--font-sans); font-size: 17px; padding: 15px 17px;
+    outline: none; transition: border-color .18s;
+  }
+  .try-input:focus { border-color: var(--amber); }
+  .try-input::placeholder { color: var(--ink-40); }
+  .verdict {
+    margin-top: 14px; display: flex; align-items: center; gap: 14px;
+    background: var(--bg-deep); border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: 16px 18px; min-height: 78px;
+  }
+  .verdict-chip {
+    font-family: var(--font-mono); font-size: 13px; font-weight: 700; letter-spacing: 0.02em;
+    padding: 8px 16px; border-radius: 999px; flex: none;
+  }
+  .verdict-chip.ok { background: var(--sage-dim); color: var(--sage); }
+  .verdict-chip.human { background: var(--clay-dim); color: var(--clay); }
+  .verdict-chip.unclear { background: var(--slate-dim); color: var(--slate); }
+  .verdict-text { font-size: 14.5px; color: var(--ink-70); line-height: 1.5; }
+  .try-examples { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .ex-chip {
+    font-size: 13.5px; color: var(--ink-55); background: transparent;
+    border: 1px solid var(--line); border-radius: 999px; padding: 7px 13px;
+    cursor: pointer; font-family: inherit; transition: all .16s;
+  }
+  .ex-chip:hover { border-color: var(--amber); color: var(--ink); }
+  .intent-cards { display: grid; gap: 12px; }
+  .intent-card {
+    display: flex; gap: 15px; align-items: flex-start;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: 18px 20px;
+  }
+  .intent-card .swatch { width: 10px; border-radius: 5px; align-self: stretch; flex: none; }
+  .intent-card.ok .swatch { background: var(--sage); }
+  .intent-card.human .swatch { background: var(--clay); }
+  .intent-card.unclear .swatch { background: var(--slate); }
+  .intent-card h3 { font-size: 16.5px; font-weight: 650; margin-bottom: 3px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .intent-card .kind { font-family: var(--font-mono); font-size: 11px; color: var(--ink-40); font-weight: 500; letter-spacing: 0.05em; }
+  .intent-card p { font-size: 14.5px; color: var(--ink-55); line-height: 1.55; }
+  @media (max-width: 860px) { .intent-grid { grid-template-columns: 1fr; } }
+
+  /* ============ screens section ============ */
+  .screen-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: clamp(18px, 2.6vw, 28px); }
+  .screen-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
+    overflow: hidden; display: flex; flex-direction: column;
+  }
+  .screen-card .imgwrap { border-bottom: 1px solid var(--line); background: var(--bg-deep); }
+  .screen-card img { width: 100%; height: auto; }
+  .screen-body { padding: 20px 22px 24px; }
+  .screen-body h3 { font-size: 18px; font-weight: 650; margin-bottom: 6px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .screen-body p { font-size: 14.5px; color: var(--ink-55); line-height: 1.55; }
+  .tag {
+    font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.06em;
+    padding: 4px 10px; border-radius: 7px; font-weight: 600;
+  }
+  .tag.tv { background: var(--amber-dim); color: var(--amber); }
+  .tag.agent { background: var(--slate-dim); color: var(--slate); }
+  .tag.aws { background: var(--sage-dim); color: var(--sage); }
+
+  /* ============ mcp section ============ */
+  .mcp-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(24px, 3.4vw, 44px); align-items: start; }
+  .tools-list { display: grid; gap: 8px; }
+  .tool-row {
+    display: flex; align-items: baseline; gap: 13px;
+    font-family: var(--font-mono); font-size: 13.5px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm);
+    padding: 11px 15px;
+  }
+  .tool-row .t { color: var(--amber); font-weight: 600; white-space: nowrap; }
+  .tool-row .d { color: var(--ink-55); font-size: 13px; }
+  .transcript-card {
+    background: var(--bg-deep); border: 1px solid var(--line-strong); border-radius: var(--r-lg);
+    overflow: hidden;
+  }
+  .transcript-head {
+    display: flex; align-items: center; gap: 9px; padding: 13px 18px;
+    border-bottom: 1px solid var(--line); background: var(--surface);
+    font-family: var(--font-mono); font-size: 12px; color: var(--ink-40);
+  }
+  .transcript-head .dots { display: flex; gap: 6px; }
+  .transcript-head .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--ink-25); }
+  .transcript-body { padding: 18px; display: flex; flex-direction: column; gap: 11px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
+  .tl { display: flex; gap: 12px; }
+  .tl .who { color: var(--slate); flex: none; width: 88px; }
+  .tl .what { color: var(--ink-70); word-break: break-word; }
+  .tl.req .what { color: var(--ink); }
+  .tl.ok .what { color: var(--sage); }
+  @media (max-width: 860px) { .mcp-grid { grid-template-columns: 1fr; } }
+
+  /* ============ safety section ============ */
+  .safety-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+  .safe-card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
+    padding: 22px;
+  }
+  .safe-card .ic {
+    width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center;
+    background: var(--sage-dim); margin-bottom: 14px;
+  }
+  .safe-card .ic svg { width: 20px; height: 20px; stroke: var(--sage); }
+  .safe-card h3 { font-size: 16.5px; font-weight: 650; margin-bottom: 5px; }
+  .safe-card p { font-size: 14.5px; color: var(--ink-55); line-height: 1.55; }
+  .safe-card p code { font-family: var(--font-mono); font-size: 12.5px; color: var(--amber); background: var(--amber-dim); padding: 2px 6px; border-radius: 5px; }
+
+  /* ============ footer ============ */
+  footer { border-top: 1px solid var(--line); padding: 40px 0 48px; position: relative; }
+  .foot-grid { display: flex; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+  .foot-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 16px; }
+  .foot-brand .brand-mark { width: 28px; height: 28px; border-radius: 8px; }
+  .foot-brand .brand-mark svg { width: 16px; height: 16px; }
+  .foot-meta { margin-left: auto; text-align: right; font-size: 13.5px; color: var(--ink-40); line-height: 1.8; }
+  .foot-meta a { color: var(--ink-55); text-decoration: none; border-bottom: 1px solid var(--ink-25); }
+  .foot-meta a:hover { color: var(--ink); border-color: var(--amber); }
+  .foot-disclaimer {
+    margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line);
+    font-size: 13px; color: var(--ink-40); display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap;
+  }
+  .foot-disclaimer .mono { font-family: var(--font-mono); font-size: 12px; }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+    html { scroll-behavior: auto; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+<div class="atmo" aria-hidden="true"></div>
+
+<!-- ============ NAV ============ -->
+<nav class="nav" aria-label="Main">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">
+      <span class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5v17M16 3.5v17M8 8h8M8 12.5h8M8 17h8"/></svg>
+      </span>
+      <span class="brand-name">Care Ladder</span>
+    </a>
+    <div class="nav-links">
+      <a href="#ladder">How it escalates</a>
+      <a href="#intent">Reply intents</a>
+      <a href="#surfaces">Surfaces</a>
+      <a href="#agent">Alexa+ agent</a>
+      <a href="#safety">Safety</a>
+      <a class="nav-cta" href="https://github.com/pamu512/care-ladder-amazon" target="_blank" rel="noopener">View the repo</a>
+    </div>
+  </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <div class="wrap hero-grid">
+    <div>
+      <span class="kicker"><span class="dot" aria-hidden="true"></span>OpenCV × Alexa+ × Fire TV</span>
+      <h1>A care system that <span class="accent">confirms<br>before it escalates.</span></h1>
+      <p class="hero-sub">
+        OpenCV notices something wrong: stillness, a covered camera, a fall signature.
+        An <b>Alexa+ agent checks in by voice</b>, waits, then pages the caregiver on
+        <b>Alexa mobile</b>. The <b>Fire TV</b> in the living room shows the same
+        timestamped audit trail, as a supporting surface.
+      </p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="#ladder">
+          See the ladder
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/pamu512/care-ladder-amazon" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.3.8-.6v-2c-3.2.7-3.9-1.5-3.9-1.5-.5-1.3-1.3-1.7-1.3-1.7-1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.4-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.2 1.2a11 11 0 0 1 5.8 0c2.2-1.5 3.2-1.2 3.2-1.2.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.2c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z"/></svg>
+          care-ladder-amazon
+        </a>
+      </div>
+      <div class="hero-facts">
+        <span class="fact-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>9 MCP tools, agent-callable</span>
+        <span class="fact-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>Silhouette-only privacy</span>
+        <span class="fact-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>Emergency dial: fail-closed off</span>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="tv-frame">
+        <div class="state-toggle" role="tablist" aria-label="Dashboard state">
+          <button id="stAllclear" class="on" type="button">ALL CLEAR</button>
+          <button id="stNotify" type="button">ESCALATED</button>
+        </div>
+        <img id="heroShot" src="assets/firetv-allclear-1280.png" alt="Care Ladder Fire TV dashboard showing the all-clear state: resident silhouette presence panel, reassurance headline and the six-rung escalation ladder standing by" width="1280" height="720">
+      </div>
+      <div class="tv-caption"><span class="dot" aria-hidden="true"></span><span id="shotCaption">live capture · production dashboard · 1280×720 · /firetv/</span></div>
+    </div>
+  </div>
+</header>
+
+<!-- ============ LADDER ============ -->
+<section id="ladder">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-label">The escalation ladder</div>
+      <h2>Six rungs. Every step confirmed, every step logged.</h2>
+      <p class="sec-sub">
+        The ladder is the product: a care plan climbs rung by rung, and each climb is an
+        auditable event. Voice check-ins carry the resident's real words. A covered camera
+        is treated as <b>privacy, never distress</b>. And the last rung stays dark.
+      </p>
+    </div>
+    <div class="ladder-board" id="ladderBoard">
+      <div class="rung" tabindex="0">
+        <span class="rung-num">1</span>
+        <span class="rung-name">OpenCV cue</span>
+        <span class="rung-desc">Stillness past the plan window, resident not visible, or a fall signature, from on-device vision.</span>
+        <span class="rung-tool">CueDetector</span>
+        <span class="rung-note">Demo plan: living-room stillness 4 minutes. An adaptive schedule can tighten the window as the system learns the household routine.</span>
+      </div>
+      <div class="rung" tabindex="0">
+        <span class="rung-num">2</span>
+        <span class="rung-name">Re-check the room</span>
+        <span class="rung-desc">Re-perceive before acting. The cue is re-read against the zone before anything is said.</span>
+        <span class="rung-tool">reperceive</span>
+        <span class="rung-note">Occlusion holds here and restarts on recovery: no distress waits while the camera cannot read the room.</span>
+      </div>
+      <div class="rung" tabindex="0">
+        <span class="rung-num">3</span>
+        <span class="rung-name">Alexa+ voice check-in</span>
+        <span class="rung-desc">Two spoken attempts with real prompt text, classified fail-closed into reply intents.</span>
+        <span class="rung-tool">alexa_checkin ×2</span>
+        <span class="rung-note">"Are you okay?" then a second, named attempt. A clear OK stands the ladder down. Mixed or concerning answers never do.</span>
+      </div>
+      <div class="rung" tabindex="0">
+        <span class="rung-num">4</span>
+        <span class="rung-name">45-second listen window</span>
+        <span class="rung-desc">A bounded wait. Late answers still count; silence moves the ladder up.</span>
+        <span class="rung-tool">wait_window</span>
+        <span class="rung-note">The window is honest about being a window: it closes, it is logged, and the family sees exactly how long it waited.</span>
+      </div>
+      <div class="rung" tabindex="0">
+        <span class="rung-num">5</span>
+        <span class="rung-name">Notify the family</span>
+        <span class="rung-desc">Alexa mobile inform card for the caregiver, with the quoted conversation. Fire TV mirrors the living-room timeline.</span>
+        <span class="rung-tool">notify_caretaker</span>
+        <span class="rung-note">Caregiver ack on Alexa mobile stops the ladder (first wins). Fire TV can mirror Acknowledge as a supporting surface.</span>
+      </div>
+      <div class="rung" tabindex="0">
+        <span class="rung-num">6</span>
+        <span class="rung-name">Request a call</span>
+        <span class="rung-desc">Simulated in the demo build, reserved fictional number only.</span>
+        <span class="rung-tool">request_call</span>
+        <span class="rung-note">(555) 010-2276, reserved NANP fiction. No real dial exists in this build.</span>
+      </div>
+      <div class="rung emergency" tabindex="0">
+        <span class="rung-num">off</span>
+        <span class="rung-name">Emergency dial</span>
+        <span class="rung-desc">Off by default. Hard-locked behind a hold-to-review gate that explains, and never enables.</span>
+        <span class="rung-tool">emergency · off</span>
+        <span class="rung-note">Care Ladder never calls emergency services on its own. A human would have to turn this on; in this build, no one can.</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ INTENT ============ -->
+<section id="intent" style="background: var(--bg); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-label">Reply intents</div>
+      <h2>"I'm okay but I think I'm hurt" never clears the ladder.</h2>
+      <p class="sec-sub">
+        Every voice reply is classified into one of three buckets before the ladder decides
+        anything. Concern always wins over reassurance, and silence is never read as consent.
+        <b>Try it. This is the real classification logic from the branch, running in your browser.</b>
+      </p>
+    </div>
+    <div class="intent-grid">
+      <div class="try-box">
+        <div class="try-label" id="tryLabel">What did the resident say?</div>
+        <input class="try-input" id="intentInput" type="text" autocomplete="off" spellcheck="false"
+          placeholder='e.g. "I'm okay but I think I'm hurt"' aria-labelledby="tryLabel">
+        <div class="verdict" aria-live="polite">
+          <span class="verdict-chip unclear" id="verdictChip">Unclear</span>
+          <span class="verdict-text" id="verdictText">Type a reply to see how the ladder would read it.</span>
+        </div>
+        <div class="try-examples" id="exRow">
+          <button class="ex-chip" type="button">I'm fine, just resting</button>
+          <button class="ex-chip" type="button">I'm okay but I think I'm hurt</button>
+          <button class="ex-chip" type="button">don't worry, I'm alright</button>
+          <button class="ex-chip" type="button">I fell… can't get up</button>
+          <button class="ex-chip" type="button">ughh</button>
+          <button class="ex-chip" type="button">yes, call Anoop</button>
+          <button class="ex-chip" type="button">leave me alone, don't call</button>
+        </div>
+      </div>
+      <div class="intent-cards">
+        <div class="intent-card ok">
+          <span class="swatch" aria-hidden="true"></span>
+          <div>
+            <h3>Clear OK <span class="kind">clear_ok</span></h3>
+            <p>Genuine reassurance, unmixed: "fine", "just resting", "don't worry". May stand the ladder down: resolve at the check-in rung, no dial.</p>
+          </div>
+        </div>
+        <div class="intent-card human">
+          <span class="swatch" aria-hidden="true"></span>
+          <div>
+            <h3>Needs human <span class="kind">needs_human</span></h3>
+            <p>Any concern token (hurt, fell, help, can't get up) or an explicit call request. The ladder does not clear; the family is notified with the quoted reply.</p>
+          </div>
+        </div>
+        <div class="intent-card unclear">
+          <span class="swatch" aria-hidden="true"></span>
+          <div>
+            <h3>Unclear <span class="kind">unclear</span></h3>
+            <p>Groans, empty transcription, garbage ASR. Never invents OK. Treated as no answer, and the ladder keeps climbing calmly.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SURFACES ============ -->
+<section id="surfaces">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-label">Surfaces</div>
+      <h2>Alexa+ primary. Fire TV supporting.</h2>
+      <p class="sec-sub" style="margin-bottom: clamp(28px, 4vh, 44px);">
+        Caregiver notify and ack live in the <b>Alexa mobile</b> skill session (inform card,
+        three actions, first ack wins). Fire TV stays the calm living-room timeline and audit wall.
+      </p>
+    </div>
+    <div class="screen-duo">
+      <div class="screen-card">
+        <div class="imgwrap"><img src="assets/firetv-allclear-1280.png" alt="Fire TV dashboard, all-clear state: presence silhouette with soft glow, All clear headline, six-rung ladder standing by" loading="lazy" width="1280" height="720"></div>
+        <div class="screen-body">
+          <h3>Fire TV · living-room timeline <span class="tag tv">/firetv/</span></h3>
+          <p>Designed for the couch, driven by the remote: D-pad spatial focus, TV-scale type, and a presence panel that reads calm from across the room. Silhouettes only. No live feed, ever. Supporting surface, not the caregiver pager.</p>
+        </div>
+      </div>
+      <div class="screen-card">
+        <div class="imgwrap"><img src="assets/firetv-notify-1280.png" alt="Fire TV dashboard, escalated state: Needs human verdict, quoted voice check-in, ladder lit up to the notify rung" loading="lazy" width="1280" height="720"></div>
+        <div class="screen-body">
+          <h3>When it escalates <span class="tag tv">needs human</span></h3>
+          <p>The headline says what happened in plain words, the transcript quotes both attempts, and the ladder shows which rung fired. The caregiver acks on Alexa mobile; Fire TV mirrors the trail.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AGENT / MCP ============ -->
+<section id="agent" style="background: var(--bg); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-label">The Alexa+ track gate</div>
+      <h2>A real MCP server, agent-callable at runtime.</h2>
+      <p class="sec-sub">
+        Self-hosted inside the same FastAPI app at <b>/mcp</b> (Streamable HTTP per the MCP
+        spec), exposing the care flow as tools. An in-repo MCP client plays the Alexa+ agent
+        and drives the ladder over real HTTP: initialize, tool call, tool call, done.
+      </p>
+    </div>
+    <div class="mcp-grid">
+      <div>
+        <div class="tools-list">
+          <div class="tool-row"><span class="t">start_or_resume_incident</span><span class="d">open or resume a care incident</span></div>
+          <div class="tool-row"><span class="t">check_in_prompt</span><span class="d">speak a check-in attempt</span></div>
+          <div class="tool-row"><span class="t">advance_rung</span><span class="d">climb to the next rung</span></div>
+          <div class="tool-row"><span class="t">resolve_incident</span><span class="d">stand the ladder down</span></div>
+          <div class="tool-row"><span class="t">get_incident_status</span><span class="d">full status + audit trail</span></div>
+          <div class="tool-row"><span class="t">notify_caretaker</span><span class="d">Alexa mobile inform card, simulated</span></div>
+          <div class="tool-row"><span class="t">request_call</span><span class="d">reserved fictional number</span></div>
+          <div class="tool-row"><span class="t">caregiver_ack</span><span class="d">Alexa mobile ack; first wins</span></div>
+          <div class="tool-row"><span class="t">caregiver_outcome</span><span class="d">close with outcome on mobile</span></div>
+        </div>
+      </div>
+      <div class="transcript-card">
+        <div class="transcript-head">
+          <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+          <span>alexa_sim · MCP client over HTTP</span>
+        </div>
+        <div class="transcript-body">
+          <div class="tl req"><span class="who">→ initialize</span><span class="what">MCP Streamable HTTP · protocol 2025-11-25+</span></div>
+          <div class="tl ok"><span class="who">← server</span><span class="what">Care Ladder · tools: 9</span></div>
+          <div class="tl req"><span class="who">→ tools/call</span><span class="what">start_or_resume_incident {"cue_kind":"no_movement"}</span></div>
+          <div class="tl ok"><span class="who">← result</span><span class="what">incident opened · rungs: reperceive → alexa_checkin → wait_window → …</span></div>
+          <div class="tl req"><span class="who">→ tools/call</span><span class="what">notify_caretaker {"household_id":"amazon-demo-1"}</span></div>
+          <div class="tl ok"><span class="who">← result</span><span class="what">notified · channels: alexa_mobile · simulated: true</span></div>
+          <div class="tl req"><span class="who">→ tools/call</span><span class="what">request_call</span></div>
+          <div class="tl ok"><span class="who">← result</span><span class="what">+12125550176 · simulated · demo_stub_no_real_dial</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ SAFETY ============ -->
+<section id="safety">
+  <div class="wrap">
+    <div class="sec-head">
+      <div class="sec-label">Safety posture</div>
+      <h2>Built fail-closed, by default.</h2>
+    </div>
+    <div class="safety-grid">
+      <div class="safe-card">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3.5 8-7 10-3.5-2-7-5-7-10V6l7-3z"/><path d="M4.5 12.5l5 5 10-11" stroke-width="2.2"/></svg></span>
+        <h3>Emergency: off, and hard-locked</h3>
+        <p>The emergency rung is <code>enabled: false</code> in the plan and fail-closed in code. The TV's hold-to-review gate explains what a live build would do, and never enables it.</p>
+      </div>
+      <div class="safe-card">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg></span>
+        <h3>Silhouette-only privacy</h3>
+        <p>Frames are privacy-transformed before they leave the device path (blur or filled silhouette). No live video exists on any surface, and no raw identifiable frames ship in demos.</p>
+      </div>
+      <div class="safe-card">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19h3M14 19h3M4 19l2.5-11h3L12 19M14 19l2-8h3l2 8"/></svg></span>
+        <h3>A complete audit trail</h3>
+        <p>Every cue, attempt, wait, jump and acknowledge is a timestamped event. The same trail the judge console, the TV and the MCP agent read from.</p>
+      </div>
+      <div class="safe-card">
+        <span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.5v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 3.8 2 2 0 0 1 4.1 1.5h3a2 2 0 0 1 2 1.7c.1 1 .4 2 .7 2.9a2 2 0 0 1-.4 2.1L8.1 9.9a16 16 0 0 0 6 6l1.7-1.3a2 2 0 0 1 2.1-.4c.9.3 1.9.6 2.9.7a2 2 0 0 1 1.7 2z"/></svg></span>
+        <h3>Reserved fictional numbers</h3>
+        <p>Demo contacts use NANP reserved fiction only: <code>(555) 010-2276</code>. The dialer is a stub; no PSTN session can open from this build.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div>
+        <div class="foot-brand">
+          <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3.5v17M16 3.5v17M8 8h8M8 12.5h8M8 17h8"/></svg></span>
+          Care Ladder
+        </div>
+        <p style="color: var(--ink-40); font-size: 14px; margin-top: 10px; max-width: 40ch;">
+          An agentic vision care ladder. OpenCV cues, an Alexa+ MCP agent, and a Fire TV
+          living-room surface. One repo, one spine.
+        </p>
+      </div>
+      <div class="foot-meta">
+        <div><a href="https://github.com/pamu512/care-ladder-amazon" target="_blank" rel="noopener">GitHub · pamu512/care-ladder-amazon</a></div>
+        <div><a href="https://d2u7pls4da2poz.cloudfront.net/ui/" target="_blank" rel="noopener">Live demo · judge console</a></div>
+        <div>Built for the Amazon Build, Ship, Shape hackathon</div>
+      </div>
+    </div>
+    <div class="foot-disclaimer">
+      <span class="mono">Wellness ladder, not a medical device.</span>
+      <span>Never calls emergency services on its own.</span>
+      <span>Speaker and dial channels are simulators in this build.</span>
+    </div>
+  </div>
+</footer>
+
+</div>
+
+<script>
+(() => {
+  // == hero screenshot toggle ==
+  const shot = document.getElementById('heroShot');
+  const cap = document.getElementById('shotCaption');
+  const bA = document.getElementById('stAllclear');
+  const bN = document.getElementById('stNotify');
+  function setShot(which) {
+    const allclear = which === 'a';
+    shot.src = allclear ? 'assets/firetv-allclear-1280.png' : 'assets/firetv-notify-1280.png';
+    shot.alt = allclear
+      ? 'Fire TV dashboard showing the all-clear state: resident silhouette presence panel, reassurance headline and the six-rung escalation ladder standing by'
+      : 'Fire TV dashboard in the escalated state: needs-human verdict headline, quoted voice check-in transcript, ladder lit up to the notify rung';
+    cap.textContent = allclear
+      ? 'live capture · production dashboard · 1280×720 · /firetv/'
+      : 'live capture · needs-human path · quoted transcript · rung 5 lit';
+    bA.classList.toggle('on', allclear);
+    bN.classList.toggle('on', !allclear);
+  }
+  bA.addEventListener('click', () => setShot('a'));
+  bN.addEventListener('click', () => setShot('n'));
+
+  // == reply-intent demo: the branch's real classification logic, ported 1:1 ==
+  // Source: src/care_ladder/channels/response_intent.py @ 0fbfb11
+  const CONCERN = new RegExp("\\b(hurt|hurts|pain|painful|fell|fall|fallen|help|injur(?:y|ed)|bleed(?:ing)?|dizz(?:y|iness)|sick|can'?t\\s+get\\s+up|cannot\\s+get\\s+up|emergency|unwell|broken|ache|aching)\\b", "i");
+  const SOFT_OK = new RegExp("(\\bdon'?t\\s+worry\\b|\\bleave\\s+me\\s+alone\\b|\\bdon'?t\\s+call\\b|\\bdo\\s+not\\s+call\\b|\\ball\\s+good\\b|\\bno\\s+problem\\b|\\bi(?:['\u2019]m|\\s+am)\\s+(?:fine|good|well|alright|all\\s+right|ok(?:ay)?)\\b|\\bjust\\s+(?:resting|napping|sitting|ok(?:ay)?)\\b|\\byes\\s+i(?:['\u2019]m|\\s+am)\\b|\\bok(?:ay)?\\b|\\bfine\\b|\\balright\\b|\\ball\\s+right\\b)", "i");
+  const UNCLEAR_TOKEN = new RegExp("^(u+h+|u+m+|m+h*|h+m+|ugh+|n+g+h+|aa+h*|oh+|nngh+|argh+|\\[(?:inaudible|unintelligible)\\]|\\.+|\u2026+|\\?+)$", "i");
+  const EXPLICIT_CALL = /\b(?:yes\s+)?call\b/i;
+  const NEGATE_CALL = /\b(?:don'?t|do\s+not)\s+call\b/i;
+
+  function isGarbage(text) {
+    const letters = text.replace(/[^a-z]/g, '');
+    if (text.length <= 2) return true;
+    if (letters && !/[aeiou]/.test(letters) && letters.length <= 8) return true;
+    if (letters && letters.length / Math.max(text.length, 1) < 0.4) return true;
+    return false;
+  }
+  function classify(raw) {
+    const text = (raw || '').trim().replace(/\s+/g, ' ').toLowerCase();
+    if (!text) return 'unclear';
+    if (UNCLEAR_TOKEN.test(text)) return 'unclear';
+    const concern = CONCERN.test(text);
+    const wantsCall = EXPLICIT_CALL.test(text) && !NEGATE_CALL.test(text);
+    if (concern || wantsCall) return 'needs_human';
+    if (SOFT_OK.test(text)) return 'clear_ok';
+    if (isGarbage(text)) return 'unclear';
+    return 'unclear';
+  }
+
+  const input = document.getElementById('intentInput');
+  const chip = document.getElementById('verdictChip');
+  const vtext = document.getElementById('verdictText');
+  const OUTCOME = {
+    clear_ok:   ['ok', 'Clear OK',      'Ladder stands down at the check-in rung. No dial, no alert. The incident resolves and the trail records the quoted reply.'],
+    needs_human: ['human', 'Needs human', 'The ladder does not clear. The family is notified with this reply quoted verbatim, and the trail records why.'],
+    unclear:    ['unclear', 'Unclear',   'Never invents OK. Treated as no answer. The ladder keeps climbing calmly to the listen window.'],
+  };
+  function run() {
+    const v = classify(input.value);
+    const [cls, label, why] = OUTCOME[v];
+    chip.className = 'verdict-chip ' + cls;
+    chip.textContent = label;
+    vtext.textContent = input.value.trim() ? why : 'Type a reply to see how the ladder would read it.';
+  }
+  input.addEventListener('input', run);
+  document.querySelectorAll('.ex-chip').forEach(b =>
+    b.addEventListener('click', () => { input.value = b.textContent; run(); input.focus(); }));
+  run();
+})();
+</script>
+</body>
+</html>

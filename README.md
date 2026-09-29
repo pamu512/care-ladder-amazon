@@ -108,6 +108,8 @@ MCP handshake + care-flow tools, Fire TV HTML/API flow, response intent, `alexa_
 
 Live HTTPS today: https://d2u7pls4da2poz.cloudfront.net/ — **shared host from the opencv-care-ladder stack**. CI on this repo is **test-only** (no auto-deploy) so OpenCV judges keep a stable CloudFront. Optional AWS replay: [`infra/README.md`](infra/README.md). Local run needs no AWS credentials: `./scripts/run_demo.sh`.
 
+Product site: https://pamu512.github.io/care-ladder-amazon/
+
 Vision ONNX models and eval clips are **not** committed. If you want the optional vision-trigger proofs: `./scripts/download_models.sh` and `./scripts/download_clips.sh`. Alexa+ fixtures do not need ONNX.
 
 ## Origins
