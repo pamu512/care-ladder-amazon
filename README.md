@@ -18,7 +18,11 @@ Amazon **Build, Ship, Shape** (draft — no Final Submit).
 | **MCP** | Spec **2025-11-25+** Streamable HTTP at `/mcp`. |
 | **AWS Builder mini** | **Not filed.** No Bedrock / AgentCore in-tree. |
 
-**Seven MCP tools:** `start_or_resume_incident` · `check_in_prompt` · `advance_rung` · `resolve_incident` · `get_incident_status` · `notify_caretaker` · `request_call`
+**MCP tools:** `start_or_resume_incident` · `check_in_prompt` · `advance_rung` · `resolve_incident` · `get_incident_status` · `notify_caretaker` · `request_call` · `caregiver_ack` · `caregiver_outcome`
+
+**Proactive Events:** optional awareness chime only. Default **off**
+(`CARE_LADDER_PROACTIVE=0`). Schema-locked; no rich buttons. Local sim
+only. See [docs/proactive-events-honesty.md](docs/proactive-events-honesty.md).
 
 ## Agentic proof (not thin MCP)
 
@@ -98,7 +102,7 @@ Honest tool/SDK notes (bonus): [`docs/friction-log.md`](docs/friction-log.md).
 .venv/bin/pytest tests/ -v
 ```
 
-MCP handshake + seven tools, Fire TV HTML/API flow, response intent, `alexa_sim` client, and the shared ladder/API spine.
+MCP handshake + care-flow tools, Fire TV HTML/API flow, response intent, `alexa_sim` client, and the shared ladder/API spine.
 
 ## Shared demo host (read-only from this repo)
 

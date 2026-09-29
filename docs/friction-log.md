@@ -253,6 +253,38 @@ runs.
 
 ---
 
+## Alexa Proactive Events (stub, flag off) - 2026-09-29
+
+**Worked:** A thin local stub (`send_awareness_chime`) can sit on the
+`family_paged` hop without changing the MCP notify/ack path. Demo and
+pytest stay green with the flag default off.
+
+**Fought back:**
+
+1. **Schema-locked catalogs.** Alexa Proactive Events / skill messaging
+   is not a free-form notify API. Rich buttons and the three caregiver
+   actions cannot be delivered inside PE itself.
+   - **Severity:** High if the demo claimed PE delivered the pager.
+   - **Workaround:** Flag `CARE_LADDER_PROACTIVE=0` by default. Chime is
+     awareness-only ("check the Alexa app"). Actions stay in the Alexa
+     mobile skill session. Honesty: `docs/proactive-events-honesty.md`.
+   - **Suggestion:** Amazon docs should lead with "schema catalog, not
+     arbitrary payload" on the first PE page, and show a chime-only
+     example next to rich-message samples.
+
+2. **No live catalog in this window.** Account/API access for a real
+   proactive campaign was not available, so the implementation is local
+   sim only (`simulated: true`).
+   - **Severity:** Medium (blocks a live chime; does not block the demo).
+   - **Workaround:** Keep the sim path (`alexa_sim` + MCP) as the proof.
+     Do not tell judges that a push button arrived via PE.
+   - **Suggestion:** A hackathon-scoped "sim catalog" or documented
+     local-only mode would have saved the oversell risk.
+
+**Verdict:** ship the stub + honesty doc; do not block A1-A3 on PE.
+
+---
+
 ## Devpost “tool feedback” paste (draft — not submitted)
 
 Anoop can paste this into the Devpost field. Full log is this file. Do
