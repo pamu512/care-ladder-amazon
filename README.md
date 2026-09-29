@@ -40,12 +40,23 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
+# One story: start API → open Fire TV → sim drives the same store the TV polls
+./scripts/amazon_demo_path.sh
+# 1) http://127.0.0.1:8010/firetv/ stays open
+# 2) alexa_sim --answer "don't worry"  → TV resolves (same incident)
+# 3) second sim (needs-human)          → TV stays notify → Acknowledge
+```
+
+Manual split (same coupling):
+
+```bash
 .venv/bin/uvicorn care_ladder.api.app:app --port 8010
 # Fire TV:  http://127.0.0.1:8010/firetv/     (Demo console, bottom right)
 # MCP:      POST http://127.0.0.1:8010/mcp    (Streamable HTTP)
-.venv/bin/python -m care_ladder.mcp_server.alexa_sim --url http://127.0.0.1:8010
-# Soft OK:  ... alexa_sim --url http://127.0.0.1:8010 --answer "don't worry"
+.venv/bin/python -m care_ladder.mcp_server.alexa_sim --url http://127.0.0.1:8010 --answer "don't worry"
 ```
+
+MCP tool calls write the incident into the AuditStore Fire TV polls (`GET /incidents`). A calm **MCP agent active** pill shows on the TV only while the sim is driving, then auto-clears. Keep `/firetv/` visible — you should see the same incident change state within one sim run.
 
 Amazon household: `configs/amazon_demo_home.yaml` (resident + primary/secondary contacts, stillness 4m). `configs/demo_home.yaml` is the legacy OpenCV plan, kept for before/after regression.
 

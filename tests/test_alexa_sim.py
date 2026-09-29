@@ -1,5 +1,6 @@
 """Alexa+ sim client (MCP client over Streamable HTTP) drives a live server."""
 
+import json
 import threading
 import time
 import urllib.request
@@ -107,6 +108,23 @@ def test_sim_soft_ok_resumes_same_incident():
         iids = [line.split("incident=", 1)[1].split()[0] for line in log if line.startswith("SESSION ")]
         assert iids and len(set(iids)) == 1
         assert final.get("status") == "resolved"
+        listing = json.loads(
+            urllib.request.urlopen("http://127.0.0.1:8793/incidents", timeout=2).read()
+        )
+        mine = [i for i in listing if i["household_id"] == "amazon-demo-1"]
+        assert mine, listing
+        full = json.loads(
+            urllib.request.urlopen(
+                f"http://127.0.0.1:8793/incidents/{mine[-1]['id']}", timeout=2
+            ).read()
+        )
+        assert full["status"] == "resolved"
+        assert any(e["tool"] == "resolve" for e in full["events"])
+        agent = json.loads(
+            urllib.request.urlopen("http://127.0.0.1:8793/mcp-agent", timeout=2).read()
+        )
+        assert agent["active"] is True
+        assert agent["incident_id"] == full["id"]
     finally:
         server.should_exit = True
         thread.join(timeout=5)

@@ -131,6 +131,7 @@
   .learn-pill[data-phase="rapid"] { background: var(--amber-dim); color: var(--amber); border-color: transparent; }
   .learn-pill[data-phase="settled"] { background: var(--sage-dim); color: var(--sage); border-color: transparent; }
   .learn-pill[data-phase="frozen"] { color: var(--ink-40); }
+  .learn-pill[data-phase="mcp"] { background: var(--slate-dim); color: var(--slate); border-color: transparent; }
   .status-pill {
     display: inline-flex; align-items: center; gap: 9px;
     padding: 8px 17px; border-radius: 999px;
@@ -412,6 +413,7 @@
       <span class="top-meta">Resident's home · Fire TV</span>
       <div class="top-spacer"></div>
       <span class="learn-pill" id="learnPill" hidden></span>
+      <span class="learn-pill" id="mcpPill" data-phase="mcp" hidden>MCP agent active</span>
       <div class="status-pill ok" id="statusPill" role="status" aria-live="polite">
         <span class="dot" aria-hidden="true"></span><span id="statusText">Ladder watching</span>
       </div>
@@ -523,6 +525,7 @@
     inc: null,
     household: 'amazon-demo-1',
     seenId: null,
+    seenSig: null,
   };
 
   const RUNGS = [
@@ -870,18 +873,40 @@
     toast('Call requested — reserved fictional number, demo only');
   }
 
+  function setMcpPill(active) {
+    const pill = $('mcpPill');
+    if (!pill) return;
+    pill.hidden = !active;
+  }
+
+  async function refreshMcpPill() {
+    try {
+      const d = await fetch('/mcp-agent').then(r => r.ok ? r.json() : {active: false});
+      setMcpPill(!!d.active);
+    } catch { setMcpPill(false); }
+  }
+
+  function incidentSig(summary, full) {
+    const last = [...(full.events || [])].reverse().find(e => e.tool === 'alexa_checkin');
+    const d = last && last.detail ? last.detail : {};
+    return [summary.id, summary.status, summary.event_count, d.reply_raw || '', d.response_intent || '', full.acked_by || ''].join('|');
+  }
+
   async function refresh(force) {
     try {
       const r = await fetch('/incidents');
       const list = await r.json();
       const mine = list.filter(i => i.household_id === state.household);
       const latest = mine[mine.length - 1] || null;
-      if (!latest) { renderIncident(null); return; }
-      if (force || latest.id !== state.seenId) {
+      if (!latest) { renderIncident(null); state.seenSig = null; await refreshMcpPill(); return; }
+      const full = await (await fetch(`/incidents/${latest.id}`)).json();
+      const sig = incidentSig(latest, full);
+      if (force || sig !== state.seenSig) {
         state.seenId = latest.id;
-        const full = await (await fetch(`/incidents/${latest.id}`)).json();
+        state.seenSig = sig;
         renderIncident(full);
       }
+      await refreshMcpPill();
     } catch { /* backend briefly away; keep current view */ }
   }
 

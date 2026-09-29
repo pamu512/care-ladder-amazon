@@ -215,3 +215,110 @@ def test_request_call_is_simulated_with_reserved_number():
         assert out["phone_e164"] == "+12125550176"
         assert "911" not in out["phone_e164"]
         _assert_session_snapshot(out, "amazon-demo-1", iid)
+
+
+def _init_and_caller(client: TestClient):
+    r = _mcp_post(client, {
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                   "clientInfo": {"name": "t", "version": "0"}},
+    })
+    sid = r.headers.get("mcp-session-id")
+
+    def call(name, args):
+        resp = _mcp_post(client, {
+            "jsonrpc": "2.0", "id": 99, "method": "tools/call",
+            "params": {"name": name, "arguments": args},
+        }, session_id=sid)
+        assert resp.status_code == 200, resp.text
+        out = _parse_sse_or_json(resp)["result"]
+        if isinstance(out, dict) and "structuredContent" in out:
+            return out["structuredContent"]
+        return out
+
+    return call
+
+
+def test_mcp_mutations_land_in_same_store_firetv_polls():
+    """alexa_sim / MCP tools must write the incident Fire TV GET /incidents reads."""
+    with TestClient(create_app(store=AuditStore())) as client:
+        call = _init_and_caller(client)
+        started = call("start_or_resume_incident", {"cue_kind": "no_movement"})
+        iid = started["incident_id"]
+
+        listing = client.get("/incidents").json()
+        mine = [i for i in listing if i["household_id"] == "amazon-demo-1"]
+        assert any(i["id"] == iid for i in mine), listing
+
+        inc = client.get(f"/incidents/{iid}").json()
+        assert inc["household_id"] == "amazon-demo-1"
+        assert inc["status"] in {"open", "exhausted"}
+        tools = [e["tool"] for e in inc["events"]]
+        assert "alexa_checkin" in tools
+        assert any(e.get("detail", {}).get("via") == "mcp" for e in inc["events"])
+
+        chk = call("check_in_prompt", {
+            "household_id": "amazon-demo-1", "incident_id": iid,
+            "utterance": "don't worry",
+        })
+        assert chk["response_intent"] == "clear_ok"
+        inc2 = client.get(f"/incidents/{iid}").json()
+        last_chk = next(
+            e for e in reversed(inc2["events"]) if e["tool"] == "alexa_checkin"
+        )
+        assert last_chk["detail"]["reply_raw"] == "don't worry"
+        assert last_chk["detail"]["response_intent"] == "clear_ok"
+        assert last_chk["detail"]["via"] == "mcp"
+
+        call("resolve_incident", {
+            "household_id": "amazon-demo-1", "incident_id": iid, "reason": "voice_ok",
+        })
+        inc3 = client.get(f"/incidents/{iid}").json()
+        assert inc3["status"] == "resolved"
+        assert any(e["tool"] == "resolve" and e["detail"].get("via") == "mcp"
+                   for e in inc3["events"])
+
+        ack = client.post(
+            f"/incidents/{iid}/ack",
+            json={"contact": "primary contact", "via": "fire_tv"},
+        )
+        assert ack.status_code == 200
+
+
+def test_mcp_needs_human_stays_notify_on_firetv_store():
+    with TestClient(create_app(store=AuditStore())) as client:
+        call = _init_and_caller(client)
+        started = call("start_or_resume_incident", {"cue_kind": "no_movement"})
+        iid = started["incident_id"]
+        call("check_in_prompt", {
+            "household_id": "amazon-demo-1", "incident_id": iid,
+            "utterance": "I'm okay but I think I'm hurt",
+        })
+        call("notify_caretaker", {"household_id": "amazon-demo-1", "incident_id": iid})
+        inc = client.get(f"/incidents/{iid}").json()
+        assert inc["status"] != "resolved"
+        tools = [e["tool"] for e in inc["events"]]
+        assert "notify_caretaker" in tools
+        assert "resolve" not in tools
+        listing = client.get("/incidents").json()
+        row = next(i for i in listing if i["id"] == iid)
+        assert row["status"] != "resolved"
+
+
+def test_mcp_agent_active_while_driving_then_auto_clears():
+    store = AuditStore()
+    with TestClient(create_app(store=store)) as client:
+        idle = client.get("/mcp-agent").json()
+        assert idle["active"] is False
+
+        call = _init_and_caller(client)
+        started = call("start_or_resume_incident", {"cue_kind": "no_movement"})
+        iid = started["incident_id"]
+        driving = client.get("/mcp-agent").json()
+        assert driving["active"] is True
+        assert driving["household_id"] == "amazon-demo-1"
+        assert driving["incident_id"] == iid
+
+        store.mark_mcp_driving("amazon-demo-1", iid, ttl_sec=0)
+        cleared = client.get("/mcp-agent").json()
+        assert cleared["active"] is False
