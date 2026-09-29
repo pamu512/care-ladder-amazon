@@ -33,7 +33,11 @@ def test_sim_silence_path_tools():
         assert any("start_or_resume_incident" in line for line in log)
         assert any("notify_caretaker" in line for line in log)
         assert any("request_call" in line for line in log)
+        assert any('"resumed": true' in line for line in log)
         assert final.get("status") in {"exhausted", "open"}
+        assert any(line.startswith("SESSION ") and "rung=" in line and "status=" in line for line in log)
+        iids = [line.split("incident=", 1)[1].split()[0] for line in log if line.startswith("SESSION ")]
+        assert iids and len(set(iids)) == 1
     finally:
         server.should_exit = True
         thread.join(timeout=5)
@@ -65,6 +69,44 @@ def test_sim_needs_human_does_not_resolve():
         assert any("notify_caretaker" in line for line in log)
         assert not any("resolve_incident" in line for line in log)
         assert final.get("status") != "resolved"
+        assert any('"resumed": true' in line for line in log)
+        assert any(line.startswith("SESSION ") and "rung=" in line and "status=" in line for line in log)
+        iids = [line.split("incident=", 1)[1].split()[0] for line in log if line.startswith("SESSION ")]
+        assert iids and len(set(iids)) == 1
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
+
+
+def test_sim_soft_ok_resumes_same_incident():
+    config = uvicorn.Config(
+        create_app(store=AuditStore()), host="127.0.0.1", port=8793, log_level="error"
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    for _ in range(50):
+        try:
+            urllib.request.urlopen("http://127.0.0.1:8793/plan", timeout=1)
+            break
+        except Exception:
+            time.sleep(0.2)
+    try:
+        log, final = asyncio.run(
+            run_sim(
+                "http://127.0.0.1:8793",
+                cue_kind="no_movement",
+                answer="don't worry",
+                verbose=False,
+            )
+        )
+        assert any("clear_ok" in line for line in log)
+        assert any("resolve_incident" in line for line in log)
+        assert any('"resumed": true' in line for line in log)
+        assert any(line.startswith("SESSION ") and "rung=" in line and "status=" in line for line in log)
+        iids = [line.split("incident=", 1)[1].split()[0] for line in log if line.startswith("SESSION ")]
+        assert iids and len(set(iids)) == 1
+        assert final.get("status") == "resolved"
     finally:
         server.should_exit = True
         thread.join(timeout=5)

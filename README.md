@@ -22,13 +22,16 @@ Amazon **Build, Ship, Shape** (draft — no Final Submit).
 
 ## Agentic proof (not thin MCP)
 
-Session state is keyed by **household + incident**. The in-repo MCP **client** `src/care_ladder/mcp_server/alexa_sim.py` drives a real HTTP initialize → `tools/call` chain:
+Session state is keyed by **household + incident** (`household_id` + `incident_id`). Every MCP tool return includes a `session_snapshot` (`household_id`, `incident_id`, `rung`, `status`, `tools` trail) so the agent carries one memory across turns — not disconnected FAQ calls.
 
-1. `start_or_resume_incident` — open or resume the same incident
-2. `check_in_prompt` — fail-closed intent (`clear_ok` / `needs_human` / `unclear`)
-3. `advance_rung` / `notify_caretaker` / `resolve_incident` — same incident id throughout
+The in-repo MCP **client** `src/care_ladder/mcp_server/alexa_sim.py` drives a real HTTP initialize → `tools/call` chain and prints a `SESSION … rung=N status=…` banner after each call:
 
-`get_incident_status` returns the household id, incident id, status, and the `tools` trail. Soft “don’t worry” can stand the ladder down; “okay but hurt” will not.
+1. `start_or_resume_incident` — open the incident
+2. `start_or_resume_incident` again with the same ids — resume-same-incident (`resumed: true`)
+3. `check_in_prompt` — fail-closed intent (`clear_ok` / `needs_human` / `unclear`)
+4. `advance_rung` / `notify_caretaker` / `resolve_incident` — same incident id throughout
+
+Soft “don’t worry” can stand the ladder down; “okay but hurt” will not. Both Path A soft-OK and needs-human print resume-same-incident and keep one incident id from start → check-in → resolve/notify.
 
 ## Quickstart (≤60s to something on screen)
 

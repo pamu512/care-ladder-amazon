@@ -21,12 +21,24 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 
+def _session_banner(payload: dict) -> str:
+    snap = payload.get("session_snapshot") or {}
+    hh = snap.get("household_id") or payload.get("household_id") or "?"
+    iid = snap.get("incident_id") or payload.get("incident_id") or "?"
+    rung = snap.get("rung", payload.get("rung", "?"))
+    status = snap.get("status", payload.get("status", "?"))
+    return f"SESSION household={hh} incident={iid} rung={rung} status={status}"
+
+
 async def _call(session: ClientSession, name: str, args: dict, log: list[str]) -> dict:
     result = await session.call_tool(name, args)
     payload = result.structured_content or {}
     line = f"ALEXA+ -> {name}({json.dumps(args)}) => {json.dumps(payload)[:140]}"
     log.append(line)
     print(line)
+    banner = _session_banner(payload)
+    log.append(banner)
+    print(banner)
     return payload
 
 
@@ -53,7 +65,15 @@ async def run_sim(
                 session, "start_or_resume_incident", {"cue_kind": cue_kind}, log
             )
             iid = started["incident_id"]
-            hh = "amazon-demo-1"
+            snap = started.get("session_snapshot") or {}
+            hh = snap.get("household_id") or started.get("household_id") or "amazon-demo-1"
+            # Same household+incident: prove the agent resumes memory, not a new FAQ turn.
+            await _call(
+                session,
+                "start_or_resume_incident",
+                {"cue_kind": cue_kind, "household_id": hh, "incident_id": iid},
+                log,
+            )
 
             if answer:
                 chk = await _call(
