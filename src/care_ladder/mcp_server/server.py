@@ -16,6 +16,12 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 
 from care_ladder.audit.store import AuditStore
+from care_ladder.channels.care_conversation import (
+    ACK_ACTIONS,
+    CareConversation,
+    ensure_family_paged,
+)
+from care_ladder.channels.caregiver_intent import classify_caregiver_intent
 from care_ladder.channels.dial import StubDialer
 from care_ladder.channels.speaker import SpeakerSimulator
 from care_ladder.ladder.orchestrator import run_incident
@@ -167,6 +173,9 @@ def start_or_resume_incident(
         )
     plan = load_care_plan(_AMAZON_PLAN)
     iid = incident_id or uuid.uuid4().hex
+    stale = CareConversation._by_household.get(household_id)
+    if stale is not None and stale.incident_id != iid:
+        CareConversation._by_household.pop(household_id, None)
     cue = CueEvent(
         kind=cue_kind,  # type: ignore[arg-type]  # validated above
         confidence=confidence,
@@ -324,9 +333,27 @@ def get_incident_status(household_id: str, incident_id: str) -> dict[str, Any]:
     )
 
 
+def _page_mobile(sess: dict[str, Any], household_id: str, reason: str) -> CareConversation:
+    inc = sess["incident"]
+    plan = load_care_plan(_AMAZON_PLAN)
+    next_name = (
+        plan.secondary.display_name if plan.secondary is not None else "Secondary contact"
+    )
+    return ensure_family_paged(
+        household_id,
+        incident_id=inc.id,
+        cue_kind=inc.cue.kind,
+        reason=reason,
+        blurred_frame_ref=f"blurred:{inc.id}",
+        cue_text=str(inc.cue.kind).replace("_", " "),
+        countdown_sec=180,
+        next_contact=next_name,
+    )
+
+
 @mcp.tool()
 def notify_caretaker(household_id: str, incident_id: str) -> dict[str, Any]:
-    """Notify the caretaker (push mock + Fire TV). Demo-simulated, no real push."""
+    """Notify the caregiver on Alexa mobile (inform card). Simulated, no real push."""
     sess = _SESSIONS.get(_session_key(household_id, incident_id))
     if sess is None:
         return _with_snapshot(
@@ -335,15 +362,26 @@ def notify_caretaker(household_id: str, incident_id: str) -> dict[str, Any]:
             incident_id,
         )
     inc = sess["incident"]
-    _append_mcp_event(
-        sess,
-        "notify_caretaker",
-        {"channels": ["push_mock", "fire_tv"], "simulated": True},
-    )
+    conv = _page_mobile(sess, household_id, reason="mcp_notify")
+    extra = {
+        "channels": ["alexa_mobile"],
+        "simulated": True,
+        "surface": "alexa_mobile",
+        "inform_card": conv.inform_card,
+        "fsm_state": conv.state,
+    }
+    _append_mcp_event(sess, "notify_caretaker", extra)
     _persist(sess)
     return _with_snapshot(
-        {"incident_id": inc.id, "notified": True, "channels": ["push_mock", "fire_tv"],
-         "simulated": True},
+        {
+            "incident_id": inc.id,
+            "notified": True,
+            "channels": ["alexa_mobile"],
+            "simulated": True,
+            "surface": "alexa_mobile",
+            "inform_card": conv.inform_card,
+            "fsm_state": conv.state,
+        },
         household_id,
         incident_id,
     )
@@ -356,6 +394,19 @@ def request_call(household_id: str, incident_id: str) -> dict[str, Any]:
     if sess is None:
         return _with_snapshot(
             {"error": "unknown incident", "incident_id": incident_id},
+            household_id,
+            incident_id,
+        )
+    conv = CareConversation.for_household(household_id)
+    if conv.escalation_stopped:
+        _persist(sess)
+        return _with_snapshot(
+            {
+                "incident_id": incident_id,
+                "skipped": True,
+                "reason": "escalation_stopped",
+                "simulated": True,
+            },
             household_id,
             incident_id,
         )
@@ -372,6 +423,122 @@ def request_call(household_id: str, incident_id: str) -> dict[str, Any]:
             "phone_e164": plan.caregiver.phone_e164,
             "simulated": True,
             "note": "demo_stub_no_real_dial",
+        },
+        household_id,
+        incident_id,
+    )
+
+
+@mcp.tool()
+def caregiver_ack(
+    household_id: str,
+    incident_id: str,
+    utterance: str = "",
+    action: str = "",
+) -> dict[str, Any]:
+    """Caregiver ack on Alexa mobile. First wins; stops pressure/call escalation."""
+    sess = _SESSIONS.get(_session_key(household_id, incident_id))
+    if sess is None:
+        return _with_snapshot(
+            {"error": "unknown incident", "incident_id": incident_id},
+            household_id,
+            incident_id,
+        )
+    resolved = action if action in ACK_ACTIONS else classify_caregiver_intent(utterance)
+    if resolved not in ACK_ACTIONS:
+        _persist(sess)
+        return _with_snapshot(
+            {
+                "error": "unclear_ack",
+                "intent": resolved,
+                "acked": False,
+                "raw": utterance,
+            },
+            household_id,
+            incident_id,
+        )
+    conv = _page_mobile(sess, household_id, reason="caregiver_ack")
+    already = conv.escalation_stopped
+    conv.ack(resolved, by="Primary contact", raw=utterance or action)
+    inc = sess["incident"]
+    now = datetime.now(timezone.utc)
+    if inc.acked_by is None:
+        inc.acked_by = conv.owner
+        inc.acked_at = now
+    _append_mcp_event(
+        sess,
+        "caregiver_ack",
+        {
+            "action": conv.acked_action,
+            "by": conv.owner,
+            "raw": utterance,
+            "channel": "alexa_mobile",
+            "first_wins": True,
+            "already_acked": already,
+            "fsm_state": conv.state,
+        },
+    )
+    _persist(sess)
+    return _with_snapshot(
+        {
+            "incident_id": incident_id,
+            "acked": True,
+            "action": conv.acked_action,
+            "owner": conv.owner,
+            "channel": "alexa_mobile",
+            "escalation_stopped": True,
+            "ask_outcome": True,
+            "already_acked": already,
+            "fsm_state": conv.state,
+        },
+        household_id,
+        incident_id,
+    )
+
+
+@mcp.tool()
+def caregiver_outcome(
+    household_id: str,
+    incident_id: str,
+    text: str,
+) -> dict[str, Any]:
+    """Record caregiver outcome on Alexa mobile and close the incident."""
+    sess = _SESSIONS.get(_session_key(household_id, incident_id))
+    if sess is None:
+        return _with_snapshot(
+            {"error": "unknown incident", "incident_id": incident_id},
+            household_id,
+            incident_id,
+        )
+    inc = sess["incident"]
+    if inc.status == "resolved":
+        return _with_snapshot(
+            {"error": "already_resolved", "incident_id": incident_id},
+            household_id,
+            incident_id,
+        )
+    conv = CareConversation.for_household(household_id)
+    conv.record_outcome(text)
+    inc.status = "resolved"
+    _append_mcp_event(
+        sess,
+        "resolve",
+        {
+            "reason": "caregiver_outcome",
+            "documentation": text,
+            "channel": "alexa_mobile",
+            "owner": conv.owner,
+            "fsm_state": conv.state,
+        },
+    )
+    _persist(sess)
+    return _with_snapshot(
+        {
+            "incident_id": incident_id,
+            "status": "resolved",
+            "documentation": text,
+            "channel": "alexa_mobile",
+            "fsm_state": "closed",
         },
         household_id,
         incident_id,

@@ -13,6 +13,10 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from care_ladder.learning.profile import RoutineProfile
 
+from care_ladder.channels.care_conversation import (
+    close_resident_ok,
+    ensure_family_paged,
+)
 from care_ladder.channels.dial import StubDialer, next_rung_after_no_answer
 from care_ladder.learning.profile import (
     effective_no_movement_timeout_sec,
@@ -485,6 +489,12 @@ async def run_incident(
                     },
                 )
                 if intent == "clear_ok":
+                    close_resident_ok(
+                        plan.household_id,
+                        incident_id=incident.id,
+                        cue_kind=cue.kind,
+                        raw=reply.raw,
+                    )
                     incident.status = "resolved"
                     _append(
                         events,
@@ -494,6 +504,8 @@ async def run_incident(
                             "reason": "alexa_checkin_ok",
                             "attempt": attempt,
                             "response_intent": intent,
+                            "fsm_state": "closed",
+                            "family_paged": False,
                         },
                     )
                     break
@@ -554,7 +566,7 @@ async def run_incident(
 
         if tool == "notify_caretaker":
             role = str(rung.params.get("role", "caregiver"))
-            channels = list(rung.params.get("channels", ["push_mock", "fire_tv"]))
+            channels = list(rung.params.get("channels", ["alexa_mobile"]))
             contact = _contact_for_role(plan, role)
             inform_only = cue.kind == "no_visibility"
             if notify_basis_override:
@@ -563,6 +575,20 @@ async def run_incident(
                 basis = "camera_health_inform"
             else:
                 basis = "no_response_escalation"
+            countdown = int(rung.params.get("countdown_sec", 180))
+            cue_text = str(cue.detail.get("cue_text") or cue.kind.replace("_", " "))
+            conv = ensure_family_paged(
+                plan.household_id,
+                incident_id=incident.id,
+                cue_kind=cue.kind,
+                reason=basis,
+                blurred_frame_ref=f"blurred:{incident.id}",
+                cue_text=cue_text,
+                countdown_sec=countdown,
+                next_contact=(
+                    plan.secondary.display_name if plan.secondary else "Secondary contact"
+                ),
+            )
             _append(
                 events,
                 tool="notify_caretaker",
@@ -574,6 +600,9 @@ async def run_incident(
                     "channels": channels,
                     "basis": basis,
                     "simulated": True,
+                    "surface": "alexa_mobile",
+                    "inform_card": conv.inform_card,
+                    "fsm_state": conv.state,
                 },
             )
             idx += 1
