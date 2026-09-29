@@ -1,5 +1,7 @@
 """Fire TV caregiver app (slice 4): served HTML anchors + full API-driven flow."""
 
+import json
+
 from fastapi.testclient import TestClient
 
 from care_ladder.api.app import create_app
@@ -163,3 +165,80 @@ def test_firetv_mcp_agent_pill_and_live_poll():
         assert "seenSig" in html or "reply_raw" in html
         idle = client.get("/mcp-agent").json()
         assert idle["active"] is False
+
+
+def _mcp_post(client: TestClient, body: dict):
+    return client.post(
+        "/mcp",
+        json=body,
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json, text/event-stream",
+        },
+    )
+
+
+def _parse_sse_or_json(resp):
+    txt = resp.text
+    if txt.startswith("event:") or txt.startswith("data:"):
+        for line in txt.splitlines():
+            if line.startswith("data:"):
+                return json.loads(line[5:].strip())
+        raise AssertionError(f"no data line in SSE: {txt[:200]}")
+    return json.loads(txt)
+
+
+def _tools_list_names(client: TestClient) -> set[str]:
+    init = _mcp_post(client, {
+        "jsonrpc": "2.0", "id": 1, "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "care-ladder-test", "version": "0.1"},
+        },
+    })
+    assert init.status_code == 200, init.text
+    listed = _mcp_post(client, {
+        "jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {},
+    })
+    assert listed.status_code == 200, listed.text
+    return {t["name"] for t in _parse_sse_or_json(listed)["result"]["tools"]}
+
+
+def test_firetv_agent_path_meta_default_hidden_ink40():
+    """Caregiver footer: Agent path · MCP in ink-40, hidden until via=mcp events."""
+    with TestClient(create_app(store=AuditStore())) as client:
+        html = client.get("/firetv/").text
+        assert "Agent path · MCP" in html
+        assert 'id="agentPathMeta"' in html
+        assert 'id="agentPathMeta" hidden' in html
+        assert "var(--ink-40)" in html
+        # shown only when this incident's events came from MCP — not a tool dump
+        assert "hasMcpEvents" in html or "via === 'mcp'" in html or 'via === "mcp"' in html
+        hero = html.split('<section class="hero"')[1].split("</section>")[0]
+        assert "jsonrpc" not in hero.lower()
+        assert "tools/call" not in hero
+        assert "tools/list" not in hero
+
+
+def test_firetv_agent_tools_toggle_default_hidden_matches_tools_list():
+    """Demo console Show agent tools is off; expand lists the seven MCP names."""
+    with TestClient(create_app(store=AuditStore())) as client:
+        html = client.get("/firetv/").text
+        assert "Show agent tools" in html
+        assert 'id="cShowTools"' in html
+        assert 'id="agentTools"' in html
+        assert 'id="agentTools" hidden' in html
+        assert 'id="cShowTools"' in html and 'aria-expanded="false"' in html
+        # judge list lives in the demo console, not the 10-foot hero
+        console = html.split('id="console"')[1].split("gate-backdrop")[0]
+        hero = html.split('<section class="hero"')[1].split("</section>")[0]
+        assert "Show agent tools" in console
+        assert "agentTools" in console
+        assert "jsonrpc" not in hero.lower()
+
+        names = _tools_list_names(client)
+        assert len(names) == 7, names
+        for name in names:
+            assert name in console, name
+            assert name not in hero, name
