@@ -162,6 +162,14 @@ class CareConversation:
                 "fsm_state": self.state,
             },
         )
+        from care_ladder.channels.proactive_events import (
+            proactive_enabled,
+            send_awareness_chime,
+        )
+
+        if proactive_enabled() and self.incident_id:
+            chime = send_awareness_chime(self.household_id, self.incident_id)
+            self._append("proactive_chime", chime)
         return self.state
 
     def pressure(self) -> CareState:
