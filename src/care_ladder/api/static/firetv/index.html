@@ -3,10 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Care Ladder · Fire TV Caregiver Dashboard</title>
+<title>Care Ladder · Fire TV living-room timeline</title>
 <!--
-  Care Ladder Fire TV caregiver dashboard — Ambient Hearth production port.
-  Layout from Concept A (presence panel, first-class ladder rail, TV-scale type).
+  Care Ladder Fire TV living-room timeline (Ambient Hearth). Supporting visual:
+  frames, rung rail, audit hops. Alexa mobile is the caregiver pager.
   Behavior stays API-driven: /incidents, /plan, /demo/run, detection frames.
   Fonts are self-hosted woff2 (Silk-friendly; no Google runtime dependency).
 -->
@@ -203,6 +203,21 @@
     font-size: 15px; color: var(--ink-70);
   }
   .push-note svg { width: 17px; height: 17px; stroke: var(--slate); flex-shrink: 0; }
+  .mobile-mirror {
+    margin-top: 14px; padding: 12px 14px;
+    border-radius: 12px; border: 1px solid var(--line);
+    background: rgba(239,234,226,0.04);
+  }
+  .blur-still {
+    height: 56px; border-radius: 8px; margin-bottom: 8px;
+    background:
+      linear-gradient(90deg, rgba(168,181,160,0.18), rgba(217,160,91,0.10), rgba(168,181,160,0.18));
+    filter: blur(6px);
+  }
+  .mirror-kicker { font-size: 13px; font-weight: 600; color: var(--ink-70); }
+  .mirror-count { font-family: var(--font-mono); font-size: 13px; color: var(--amber); margin-top: 4px; }
+  .three-actions { margin-top: 8px; padding-left: 18px; color: var(--ink-70); font-size: 14px; }
+  .three-actions li { margin: 3px 0; }
 
   .presence {
     background: rgba(46,43,37,0.55);
@@ -423,7 +438,7 @@
         </div>
         <span class="brand-name">Care Ladder</span>
       </div>
-      <span class="top-meta">Resident's home · Fire TV</span>
+      <span class="top-meta">Resident's home · Fire TV · Ambient Hearth</span>
       <div class="top-spacer"></div>
       <span class="learn-pill" id="learnPill" hidden></span>
       <span class="learn-pill" id="mcpPill" data-phase="mcp" hidden>MCP agent active</span>
@@ -444,7 +459,17 @@
         <div class="actions" id="actions"></div>
         <div class="push-note" id="pushNote" hidden>
           <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
-          <span id="pushText">Push sent to the primary contact's phone · this TV · 14:03</span>
+          <span id="pushText">Family informed on Alexa mobile · this TV mirrors the trail</span>
+        </div>
+        <div class="mobile-mirror" id="mobileMirror" hidden>
+          <div class="blur-still" id="blurStill" aria-hidden="true"></div>
+          <p class="mirror-kicker" id="mirrorKicker">Family informed on Alexa mobile</p>
+          <p class="mirror-count" id="mirrorCount">Countdown 3:00</p>
+          <ul class="three-actions" id="threeActions">
+            <li>I'm on it - call her myself</li>
+            <li>Call Mom now</li>
+            <li>Can't take it - go to Secondary contact</li>
+          </ul>
         </div>
       </section>
 
@@ -611,21 +636,30 @@
         <span class="a-m">${esc(auditMsg(ev))}</span>
       </span>${i < arr.length - 1 ? '<span class="a-sep">→</span>' : ''}`).join('');
   }
+  function hopTime(ev) {
+    if (!ev || !ev.at) return '';
+    const d = new Date(ev.at);
+    if (Number.isNaN(d.getTime())) return '';
+    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+  }
   function auditMsg(ev) {
     const d = ev.detail || {};
     const via = d.via === 'mcp' ? 'via mcp · ' : '';
+    const when = hopTime(ev);
+    const stamp = when ? when + ' · ' : '';
     let msg;
     switch (ev.tool) {
       case 'cue': msg = `${ev.cue_kind || ''} cue`; break;
       case 'alexa_checkin': msg = `attempt ${d.attempt || 1} · ${d.intent_label || (d.reply_kind === 'ok' ? 'answered' : 'no speech')}`; break;
       case 'wait_window': msg = `wait closed · ${d.sec || 45}s`; break;
-      case 'notify_caretaker': msg = `caretaker notified · ${(d.channels || []).join(' + ')}`; break;
+      case 'notify_caretaker': msg = `family informed · ${(d.channels || ['alexa_mobile']).join(' + ')}`; break;
       case 'request_call': msg = `call requested · simulated`; break;
+      case 'caregiver_ack': msg = `acked on Alexa mobile · ${d.action || ''}`; break;
       case 'jump': msg = `skipped · ${d.reason || ''}`; break;
-      case 'resolve': msg = `resolved · ${d.reason || ''}`; break;
+      case 'resolve': msg = `resolved · ${d.reason || ''}${d.documentation ? ' · ' + d.documentation : ''}`; break;
       default: msg = ev.tool;
     }
-    return via + msg;
+    return stamp + via + msg;
   }
 
   function renderTranscript(inc) {
@@ -750,6 +784,7 @@
     const phase = incidentPhase(inc);
     state.phase = phase; state.inc = inc;
     setAgentPathMeta(inc);
+    if ($('mobileMirror')) $('mobileMirror').hidden = true;
     const notify = inc && inc.events.find(e => e.tool === 'notify_caretaker');
     const resolve = inc && inc.events.find(e => e.tool === 'resolve');
     const tools = inc ? inc.events.map(e => e.tool) : [];
@@ -783,14 +818,15 @@
       setPresenceArt('lens');
       setPill('info', 'Camera blocked'); setChip('info', 'Rung 1 · Holding');
       $('heroTitle').textContent = 'Camera is blocked — checking on the resident';
-      const informed = notify ? 'the primary contact is being informed now.' : 'Nothing escalates while the room can\'t be read.';
+      const informed = notify ? 'family informed on Alexa mobile.' : 'Nothing escalates while the room can\'t be read.';
       $('heroSub').textContent = 'Coverage reads as privacy, not distress — ' + informed;
       $('silLabel').textContent = 'No reading · lens covered';
       $('silNote').textContent = 'Living room · last reading 6 min ago';
       if (notify) {
         $('pushNote').hidden = false;
-        $('pushText').textContent = 'Push sent to the primary contact\'s phone · this TV · ' + fmtClock();
-        setActions([{ label: 'Acknowledge', cls: 'btn btn-primary', fn: () => doAck(inc.id) }]);
+        $('pushText').textContent = 'Family informed on Alexa mobile · this TV mirrors the trail · ' + fmtClock();
+        showMobileMirror(notify);
+        setActions([{ label: 'Archive on this TV (demo)', cls: 'btn btn-ghost', fn: () => doAck(inc.id) }]);
       } else {
         $('pushNote').hidden = true;
         setActions([]);
@@ -817,25 +853,24 @@
       setAtmosphere('notify', true);
       setGlow('clay');
       setPresenceArt('bust');
-      setPill('urgent', 'Calling primary'); setChip('urgent', 'Rung 4 · Notify caretaker');
+      setPill('urgent', 'Family informed'); setChip('urgent', 'Rung 4 · Alexa mobile');
       const lastChk = [...(inc.events || [])].reverse().find(e => e.tool === 'alexa_checkin');
       const lastIntent = lastChk && lastChk.detail && lastChk.detail.response_intent;
+      $('heroTitle').textContent = 'Family informed on Alexa mobile';
       if (lastIntent === 'needs_human') {
-        $('heroTitle').textContent = 'The resident answered — still needs a human';
-        $('heroSub').textContent = 'same incident · Alexa+ agent remembers · the ladder did not clear.';
+        $('heroSub').textContent = 'The resident answered and still needs a human. This TV is the living-room timeline. Ack happens on Alexa mobile.';
       } else if (lastIntent === 'unclear') {
-        $('heroTitle').textContent = 'The reply was unclear · calling the primary contact';
-        $('heroSub').textContent = 'same incident · Alexa+ agent remembers · no clear answer · the primary contact is being informed now.';
+        $('heroSub').textContent = 'The reply was unclear. Family informed on Alexa mobile. This TV mirrors the trail.';
       } else {
-        $('heroTitle').textContent = 'The resident has not responded · calling the primary contact';
-        $('heroSub').textContent = 'Two voice attempts · 45 seconds of silence · same incident · Alexa+ agent remembers.';
+        $('heroSub').textContent = 'Two voice attempts · 45 seconds of silence · family informed on Alexa mobile. This TV mirrors the trail.';
       }
       $('pushNote').hidden = false;
-      $('pushText').textContent = 'Push sent to the primary contact\'s phone · this TV · ' + fmtClock();
+      $('pushText').textContent = 'Family informed on Alexa mobile · this TV mirrors the trail · ' + fmtClock();
       $('silLabel').textContent = 'Silhouette · processed on device';
       $('silNote').textContent = 'Living room · last reading just now';
+      showMobileMirror(notify);
       setActions([
-        { label: 'Acknowledge', cls: 'btn btn-primary', fn: () => doAck(inc.id) },
+        { label: 'Archive on this TV (demo)', cls: 'btn btn-ghost', fn: () => doAck(inc.id) },
         { label: 'Request call · (555) 010-2276', cls: 'btn btn-ghost', fn: requestCallStub },
         { label: 'Emergency · off', cls: 'btn btn-danger-off', fn: openGate },
       ]);
@@ -901,12 +936,28 @@
     toast('Back to all clear');
   }
 
+  function showMobileMirror(notify) {
+    const box = $('mobileMirror');
+    if (!box) return;
+    const card = notify && notify.detail && notify.detail.inform_card;
+    const sec = (card && card.countdown_sec) || 180;
+    const mm = String(Math.floor(sec / 60));
+    const ss = String(sec % 60).padStart(2, '0');
+    $('mirrorCount').textContent = 'Countdown ' + mm + ':' + ss;
+    const acts = (card && card.actions) || [];
+    if (acts.length === 3) {
+      $('threeActions').innerHTML = acts.map(a => '<li>' + esc(a.label) + '</li>').join('');
+    }
+    box.hidden = false;
+  }
+
   async function doAck(iid) {
     try {
       const r = await fetch(`/incidents/${iid}/ack`, { method: 'POST',
         headers: {'content-type':'application/json'},
         body: JSON.stringify({ contact: 'primary contact', via: 'fire_tv' }) });
-      if (r.ok) { toast('Incident acknowledged · trail preserved'); await refresh(true); }
+      if (r.status === 409) { toast('Already acknowledged on Alexa mobile'); await refresh(true); return; }
+      if (r.ok) { toast('Archived on this TV · trail preserved'); await refresh(true); }
       else toast('Ack failed');
     } catch (e) { toast('Ack failed: ' + e.message); }
   }
