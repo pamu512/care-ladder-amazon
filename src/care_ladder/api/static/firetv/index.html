@@ -325,6 +325,19 @@
   .console-btn:disabled { opacity: 0.4; cursor: not-allowed; }
   .console-btn b { font-weight: 600; display: block; }
   .console-btn span { color: var(--ink-40); display: block; margin-top: 2px; font-size: 11.5px; }
+  .agent-path-meta { color: var(--ink-40); }
+  .agent-tools {
+    list-style: none;
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-size: 12px;
+    line-height: 1.55;
+    color: var(--ink-60);
+    padding: 4px 8px 2px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
 
   .gate-backdrop {
     position: fixed; inset: 0; z-index: 90;
@@ -477,6 +490,7 @@
       <span>Emergency dial off by default</span>
       <span class="sep">·</span>
       <span id="footPlan">Plan: living-room stillness 4m · contacts primary → next</span>
+      <span id="agentPathMeta" hidden class="agent-path-meta"><span class="sep">·</span> Agent path · MCP</span>
       <button class="console-toggle" id="consoleToggle" aria-expanded="false" aria-controls="console">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
         Demo console
@@ -495,6 +509,20 @@
     <button class="console-btn" id="cUnclear" data-fixture="alexa_path_a_unclear"><b>Unclear groan</b><span>nngh · Unclear · re-ask then notify</span></button>
     <button class="console-btn" id="cOccluded" data-fixture="alexa_path_b"><b>Path B · camera occluded</b><span>blanket over the lens · never claims distress</span></button>
     <button class="console-btn" id="cReset"><b>Back to all clear</b><span>standby view</span></button>
+    <button class="console-btn" id="cShowTools" type="button" aria-expanded="false" aria-controls="agentTools">
+      <b>Show agent tools</b>
+      <span>seven MCP tools this incident</span>
+    </button>
+    <!-- ponytail: catalog is tools/list (7 names), not audit rung names already on the rail -->
+    <ul class="agent-tools" id="agentTools" hidden>
+      <li>start_or_resume_incident</li>
+      <li>check_in_prompt</li>
+      <li>advance_rung</li>
+      <li>resolve_incident</li>
+      <li>get_incident_status</li>
+      <li>notify_caretaker</li>
+      <li>request_call</li>
+    </ul>
   </div>
 
   <div class="gate-backdrop" id="gateBackdrop">
@@ -686,6 +714,17 @@
   function setPill(kind, text) { $('statusPill').className = 'status-pill ' + kind; $('statusText').textContent = text; }
   function setChip(kind, text) { $('rungChip').className = 'rung-chip ' + kind; $('rungChip').textContent = text; }
 
+  function hasMcpEvents(inc) {
+    if (!inc) return false;
+    if (inc.cue && inc.cue.detail && inc.cue.detail.via === 'mcp') return true;
+    return (inc.events || []).some(e => e.detail && e.detail.via === 'mcp');
+  }
+  function setAgentPathMeta(inc) {
+    const el = $('agentPathMeta');
+    if (!el) return;
+    el.hidden = !hasMcpEvents(inc);
+  }
+
   let toastT;
   function toast(msg) {
     $('toast').textContent = msg;
@@ -708,6 +747,7 @@
   function renderIncident(inc) {
     const phase = incidentPhase(inc);
     state.phase = phase; state.inc = inc;
+    setAgentPathMeta(inc);
     const notify = inc && inc.events.find(e => e.tool === 'notify_caretaker');
     const resolve = inc && inc.events.find(e => e.tool === 'resolve');
     const tools = inc ? inc.events.map(e => e.tool) : [];
@@ -1013,6 +1053,12 @@
     });
   });
   $('cReset').addEventListener('click', toAllClear);
+  $('cShowTools').addEventListener('click', () => {
+    const list = $('agentTools');
+    const opening = list.hidden;
+    list.hidden = !opening;
+    $('cShowTools').setAttribute('aria-expanded', String(opening));
+  });
 })();
 </script>
 </body>
