@@ -147,3 +147,19 @@ def test_amazon_fixture_carries_learning_detail():
         learning = inc['cue']['detail'].get('learning')
         assert learning and learning['learning_phase'] in {'rapid', 'settled'}
         assert any(e['tool'] == 'routine_profile_update' for e in inc['events'])
+
+
+def test_firetv_mcp_agent_pill_and_live_poll():
+    """Calm MCP pill is off by default; TV re-polls same incident as events land."""
+    with TestClient(create_app(store=AuditStore())) as client:
+        html = client.get("/firetv/").text
+        assert 'id="mcpPill"' in html
+        assert "MCP agent active" in html
+        assert "/mcp-agent" in html
+        # default hidden so standby stays calm
+        assert 'id="mcpPill" data-phase="mcp" hidden' in html
+        # same-incident poll: event_count / reply, not just a new id
+        assert "event_count" in html
+        assert "seenSig" in html or "reply_raw" in html
+        idle = client.get("/mcp-agent").json()
+        assert idle["active"] is False

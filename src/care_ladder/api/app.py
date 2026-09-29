@@ -483,9 +483,11 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
     # from this app's own lifespan (ASGI mounts do not propagate lifespan).
     import contextlib
 
-    from care_ladder.mcp_server.server import mcp as care_ladder_mcp
+    from care_ladder.mcp_server.server import bind_audit_store, mcp as care_ladder_mcp
 
     from mcp.server.transport_security import TransportSecuritySettings
+
+    bind_audit_store(audit)
 
     _mcp_asgi = care_ladder_mcp.streamable_http_app(
         stateless_http=True,
@@ -567,6 +569,14 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
             if contact and contact.get("phone_e164"):
                 contact["phone_e164"] = _redact(contact["phone_e164"])
         return data
+
+    @application.get("/mcp-agent")
+    def mcp_agent() -> dict[str, Any]:
+        """Calm Fire TV pill: true only while an MCP session is driving."""
+        status = getattr(application.state.store, "mcp_agent_status", None)
+        if status is None:
+            return {"active": False, "household_id": None, "incident_id": None}
+        return status()
 
     @application.get("/incidents")
     def list_incidents() -> list[dict[str, Any]]:

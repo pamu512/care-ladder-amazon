@@ -1,6 +1,9 @@
 """Amazon demo fixtures: Path A (stillness) and Path B (occlusion, never distress)."""
 
 import json
+import os
+import subprocess
+from pathlib import Path
 
 from fastapi.testclient import TestClient
 
@@ -92,3 +95,32 @@ def test_amazon_plan_not_the_opencv_default():
         assert inc["household_id"] == "demo-home-1"
         tools = [e["tool"] for e in inc["events"]]
         assert "speaker_prompt" in tools and "alexa_checkin" not in tools
+
+
+def test_amazon_demo_path_script_is_the_one_story():
+    text = Path("scripts/amazon_demo_path.sh").read_text()
+    assert "don't worry" in text
+    assert "/firetv/" in text
+    assert "alexa_sim" in text
+    assert "Acknowledge" in text
+    assert "1280×720" in text or "1280x720" in text
+    assert "shots 3" in text
+    assert "never open" in text.lower() or "Never open" in text
+
+
+def test_amazon_demo_path_check_mode_cold_run():
+    """Third-party CHECK=1 path: sim mutations visible on /incidents."""
+    root = Path(__file__).resolve().parents[1]
+    env = {**os.environ, "CHECK": "1", "PORT": "8798", "HOST": "127.0.0.1"}
+    r = subprocess.run(
+        ["bash", str(root / "scripts" / "amazon_demo_path.sh")],
+        cwd=root,
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=90,
+    )
+    out = (r.stdout or "") + (r.stderr or "")
+    assert r.returncode == 0, out
+    assert "same incident resolved" in out
+    assert "notify stays up" in out

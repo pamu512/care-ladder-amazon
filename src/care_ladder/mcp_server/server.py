@@ -15,6 +15,7 @@ from typing import Any
 
 from mcp.server.mcpserver import MCPServer
 
+from care_ladder.audit.store import AuditStore
 from care_ladder.channels.dial import StubDialer
 from care_ladder.channels.speaker import SpeakerSimulator
 from care_ladder.ladder.orchestrator import run_incident
@@ -31,10 +32,33 @@ _AMAZON_PLAN = _REPO_ROOT / "configs" / "amazon_demo_home.yaml"
 
 mcp: MCPServer = MCPServer("Care Ladder")
 
-# In-memory incident sessions keyed by household+incident id (the AuditStore
-# remains the durable record; this registry maps MCP sessions to incidents).
+# Session registry keyed by household+incident. Incidents are also saved
+# into the FastAPI AuditStore so Fire TV's /incidents poll sees the same
+# object the MCP tools mutate.
 _SESSIONS: dict[str, dict[str, Any]] = {}
 _PENDING_ANSWERS: dict[str, str] = {}
+_STORE: AuditStore | None = None
+
+
+def bind_audit_store(store: AuditStore | None) -> None:
+    """Point MCP mutations at the same store Fire TV polls."""
+    global _STORE
+    _STORE = store
+
+
+def _persist(sess: dict[str, Any] | None, *, driving: bool = True) -> None:
+    if _STORE is None or sess is None:
+        return
+    inc = sess["incident"]
+    _STORE.save(inc)
+    if driving:
+        _STORE.mark_mcp_driving(sess["household_id"], inc.id)
+
+
+def _mark_driving(household_id: str, incident_id: str | None) -> None:
+    if _STORE is None or not incident_id:
+        return
+    _STORE.mark_mcp_driving(household_id, incident_id)
 
 
 def _session_key(household_id: str, incident_id: str) -> str:
@@ -127,6 +151,7 @@ def start_or_resume_incident(
     """
     if incident_id and _session_key(household_id, incident_id) in _SESSIONS:
         sess = _SESSIONS[_session_key(household_id, incident_id)]
+        _persist(sess)
         return _with_snapshot(
             {"incident_id": sess["incident"].id, "resumed": True,
              "status": sess["incident"].status, "rungs": sess["rungs"]},
@@ -160,11 +185,13 @@ def start_or_resume_incident(
     # Keep the caller-visible id stable even though run_incident mints its own.
     incident.id = iid
     _stamp_via_mcp(incident)
-    _SESSIONS[_session_key(household_id, iid)] = {
+    sess = {
         "incident": incident,
         "rungs": [r.tool for r in plan.rungs],
         "household_id": household_id,
     }
+    _SESSIONS[_session_key(household_id, iid)] = sess
+    _persist(sess)
     return _with_snapshot(
         {"incident_id": iid, "resumed": False, "status": incident.status,
          "rungs": [r.tool for r in plan.rungs]},
@@ -207,6 +234,9 @@ def check_in_prompt(household_id: str, incident_id: str, utterance: str) -> dict
             last_chk.detail = {**last_chk.detail, **detail}
         else:
             _append_mcp_event(sess, "alexa_checkin", detail)
+        _persist(sess)
+    else:
+        _mark_driving(household_id, incident_id)
     return _with_snapshot(
         {
             "incident_id": incident_id,
@@ -230,6 +260,7 @@ def advance_rung(household_id: str, incident_id: str) -> dict[str, Any]:
             household_id,
             incident_id,
         )
+    _persist(sess)
     tools = [e.tool for e in sess["incident"].events]
     return _with_snapshot(
         {"incident_id": incident_id, "advanced_to": sess["rungs"][-1],
@@ -259,6 +290,7 @@ def resolve_incident(
         )
     sess["incident"].status = "resolved"
     _append_mcp_event(sess, "resolve", {"reason": reason})
+    _persist(sess)
     return _with_snapshot(
         {"incident_id": incident_id, "status": "resolved", "reason": reason},
         household_id,
@@ -277,6 +309,7 @@ def get_incident_status(household_id: str, incident_id: str) -> dict[str, Any]:
             incident_id,
         )
     inc = sess["incident"]
+    _persist(sess)
     return _with_snapshot(
         {
             "incident_id": inc.id,
@@ -306,6 +339,7 @@ def notify_caretaker(household_id: str, incident_id: str) -> dict[str, Any]:
         "notify_caretaker",
         {"channels": ["push_mock", "fire_tv"], "simulated": True},
     )
+    _persist(sess)
     return _with_snapshot(
         {"incident_id": inc.id, "notified": True, "channels": ["push_mock", "fire_tv"],
          "simulated": True},
@@ -330,6 +364,7 @@ def request_call(household_id: str, incident_id: str) -> dict[str, Any]:
         "request_call",
         {"phone_e164": plan.caregiver.phone_e164, "simulated": True},
     )
+    _persist(sess)
     return _with_snapshot(
         {
             "incident_id": incident_id,
@@ -347,4 +382,4 @@ def mount_path() -> str:
     return "/mcp"
 
 
-__all__ = ["mcp", "mount_path", "session_snapshot"]
+__all__ = ["mcp", "mount_path", "session_snapshot", "bind_audit_store"]
