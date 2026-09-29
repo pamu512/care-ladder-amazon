@@ -54,6 +54,7 @@ def _append(
             cue_kind=cue_kind,
             rung_id=rung_id,
             detail=detail or {},
+            at=datetime.now(timezone.utc),
         )
     )
 

@@ -248,3 +248,23 @@ def test_quiet_hours_does_not_suppress_distress():
         e.tool == "suppress" or e.detail.get("reason") == "quiet_hours"
         for e in incident.events
     )
+
+
+def test_incident_trail_events_have_at_and_preserve_order():
+    plan = load_care_plan(Path("configs/demo_home.yaml"))
+    cue = CueEvent(kind="no_movement", confidence=0.9, detail={})
+    incident = asyncio.run(
+        run_incident(
+            cue=cue,
+            plan=plan,
+            speaker=SpeakerSimulator(scripted=["I'm fine"]),
+            dialer=StubDialer(behavior={"caregiver": "answered"}),
+            pre_event_frames=[],
+            now=DAYTIME,
+        )
+    )
+    assert incident.events, "expected a non-empty trail"
+    assert all(e.at is not None for e in incident.events)
+    stamps = [e.at for e in incident.events]
+    assert stamps == sorted(stamps)
+    assert all(e.at.tzinfo is not None for e in incident.events)

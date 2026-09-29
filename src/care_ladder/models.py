@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field
@@ -81,6 +81,7 @@ class AuditEvent(BaseModel):
     cue_kind: str | None = None
     rung_id: str | None = None
     detail: dict[str, Any] = Field(default_factory=dict)
+    at: datetime | None = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 IncidentStatus = Literal["open", "resolved", "exhausted", "suppressed"]

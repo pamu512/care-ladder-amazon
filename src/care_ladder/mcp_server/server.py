@@ -133,6 +133,7 @@ def _append_mcp_event(sess: dict[str, Any], tool: str, extra: dict[str, Any] | N
             tool=tool,
             cue_kind=inc.cue.kind,
             detail={"via": "mcp", **(extra or {})},
+            at=datetime.now(timezone.utc),
         )
     )
 
