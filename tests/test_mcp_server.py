@@ -162,3 +162,112 @@ def test_request_call_is_simulated_with_reserved_number():
         assert out["simulated"] is True
         assert out["phone_e164"] == "+12125550176"
         assert "911" not in out["phone_e164"]
+
+
+SESSION_FIELDS = ("household_id", "incident_id", "rung", "status", "tools")
+
+
+def _assert_session_memory(payload, *, household="amazon-demo-1", incident_id=None):
+    """Every MCP tool return is one agent memory, not a disconnected blob."""
+    for key in SESSION_FIELDS:
+        assert key in payload, f"missing {key} in {payload}"
+    assert payload["household_id"] == household
+    if incident_id is not None:
+        assert payload["incident_id"] == incident_id
+    assert isinstance(payload["rung"], int)
+    assert isinstance(payload["tools"], list)
+    snap = payload["session_snapshot"]
+    for key in SESSION_FIELDS:
+        assert snap[key] == payload[key], key
+    assert snap["key"] == f"{payload['household_id']}:{payload['incident_id']}"
+
+
+def test_every_tool_return_includes_session_snapshot():
+    with TestClient(create_app(store=AuditStore())) as client:
+        r = _mcp_post(client, {
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                       "clientInfo": {"name": "t", "version": "0"}},
+        })
+        sid = r.headers.get("mcp-session-id")
+
+        def call(name, args):
+            resp = _mcp_post(client, {
+                "jsonrpc": "2.0", "id": 99, "method": "tools/call",
+                "params": {"name": name, "arguments": args},
+            }, session_id=sid)
+            assert resp.status_code == 200, resp.text
+            out = _parse_sse_or_json(resp)["result"]
+            if isinstance(out, dict) and "structuredContent" in out:
+                return out["structuredContent"]
+            return out
+
+        started = call("start_or_resume_incident", {"cue_kind": "no_movement"})
+        iid = started["incident_id"]
+        hh = {"household_id": "amazon-demo-1", "incident_id": iid}
+        _assert_session_memory(started, incident_id=iid)
+        assert started["resumed"] is False
+
+        for name, extra in (
+            ("get_incident_status", {}),
+            ("check_in_prompt", {"utterance": "I'm fine"}),
+            ("advance_rung", {}),
+            ("notify_caretaker", {}),
+            ("request_call", {}),
+            ("resolve_incident", {"reason": "voice_ok"}),
+        ):
+            out = call(name, {**hh, **extra})
+            _assert_session_memory(out, incident_id=iid)
+            assert out["session_snapshot"]["key"] == started["session_snapshot"]["key"]
+
+
+def test_resume_same_incident_reuses_session_snapshot():
+    with TestClient(create_app(store=AuditStore())) as client:
+        r = _mcp_post(client, {
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                       "clientInfo": {"name": "t", "version": "0"}},
+        })
+        sid = r.headers.get("mcp-session-id")
+
+        def call(name, args):
+            resp = _mcp_post(client, {
+                "jsonrpc": "2.0", "id": 7, "method": "tools/call",
+                "params": {"name": name, "arguments": args},
+            }, session_id=sid)
+            out = _parse_sse_or_json(resp)["result"]
+            if isinstance(out, dict) and "structuredContent" in out:
+                return out["structuredContent"]
+            return out
+
+        started = call("start_or_resume_incident", {"cue_kind": "no_movement"})
+        iid = started["incident_id"]
+        resumed = call("start_or_resume_incident", {
+            "cue_kind": "no_movement",
+            "household_id": "amazon-demo-1",
+            "incident_id": iid,
+        })
+        assert resumed["resumed"] is True
+        _assert_session_memory(resumed, incident_id=iid)
+        assert resumed["session_snapshot"] == started["session_snapshot"]
+
+
+def test_unknown_incident_still_carries_session_fields():
+    with TestClient(create_app(store=AuditStore())) as client:
+        r = _mcp_post(client, {
+            "jsonrpc": "2.0", "id": 1, "method": "initialize",
+            "params": {"protocolVersion": "2025-11-25", "capabilities": {},
+                       "clientInfo": {"name": "t", "version": "0"}},
+        })
+        sid = r.headers.get("mcp-session-id")
+        resp = _mcp_post(client, {
+            "jsonrpc": "2.0", "id": 3, "method": "tools/call",
+            "params": {"name": "get_incident_status",
+                       "arguments": {"household_id": "amazon-demo-1", "incident_id": "nope"}},
+        }, session_id=sid)
+        out = _parse_sse_or_json(resp)["result"]
+        payload = out["structuredContent"] if isinstance(out, dict) and "structuredContent" in out else out
+        assert payload.get("error") == "unknown incident" or "unknown incident" in str(payload)
+        _assert_session_memory(payload, incident_id="nope")
+        assert payload["tools"] == []
+        assert payload["rung"] == 0

@@ -21,12 +21,24 @@ from mcp.client.session import ClientSession
 from mcp.client.streamable_http import streamable_http_client
 
 
+def _session_banner(payload: dict) -> str:
+    snap = payload.get("session_snapshot") or {}
+    hh = snap.get("household_id") or payload.get("household_id") or "?"
+    iid = snap.get("incident_id") or payload.get("incident_id") or "?"
+    rung = snap.get("rung", payload.get("rung", 0))
+    status = snap.get("status", payload.get("status"))
+    return f"SESSION {hh}:{iid} rung={rung} status={status}"
+
+
 async def _call(session: ClientSession, name: str, args: dict, log: list[str]) -> dict:
     result = await session.call_tool(name, args)
     payload = result.structured_content or {}
     line = f"ALEXA+ -> {name}({json.dumps(args)}) => {json.dumps(payload)[:140]}"
     log.append(line)
     print(line)
+    banner = _session_banner(payload)
+    log.append(banner)
+    print(banner)
     return payload
 
 
@@ -50,10 +62,24 @@ async def run_sim(
                 print(log[-1])
 
             started = await _call(
-                session, "start_or_resume_incident", {"cue_kind": cue_kind}, log
+                session,
+                "start_or_resume_incident",
+                {"cue_kind": cue_kind, "household_id": "amazon-demo-1"},
+                log,
             )
             iid = started["incident_id"]
-            hh = "amazon-demo-1"
+            hh = started.get("household_id") or "amazon-demo-1"
+
+            resumed = await _call(
+                session,
+                "start_or_resume_incident",
+                {"cue_kind": cue_kind, "household_id": hh, "incident_id": iid},
+                log,
+            )
+            if resumed.get("resumed"):
+                resume_line = f"ALEXA+ resume-same-incident {iid}"
+                log.append(resume_line)
+                print(resume_line)
 
             if answer:
                 chk = await _call(

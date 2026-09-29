@@ -22,13 +22,14 @@ Amazon **Build, Ship, Shape** (draft — no Final Submit).
 
 ## Agentic proof (not thin MCP)
 
-Session state is keyed by **household + incident**. The in-repo MCP **client** `src/care_ladder/mcp_server/alexa_sim.py` drives a real HTTP initialize → `tools/call` chain:
+Session state is keyed by **household + incident** (`amazon-demo-1:<incident_id>`). Every MCP tool return includes `household_id`, `incident_id`, `rung` / `status`, the `tools` trail, and one reused `session_snapshot`. The in-repo MCP **client** `src/care_ladder/mcp_server/alexa_sim.py` drives a real HTTP initialize → `tools/call` chain and prints a `SESSION … rung=N status=…` banner between calls:
 
-1. `start_or_resume_incident` — open or resume the same incident
-2. `check_in_prompt` — fail-closed intent (`clear_ok` / `needs_human` / `unclear`)
-3. `advance_rung` / `notify_caretaker` / `resolve_incident` — same incident id throughout
+1. `start_or_resume_incident` — open the incident
+2. `start_or_resume_incident` again — **resume-same-incident** (same id, same snapshot)
+3. `check_in_prompt` — fail-closed intent (`clear_ok` / `needs_human` / `unclear`)
+4. `resolve_incident` (soft OK) **or** `notify_caretaker` (needs-human) — same incident id throughout
 
-`get_incident_status` returns the household id, incident id, status, and the `tools` trail. Soft “don’t worry” can stand the ladder down; “okay but hurt” will not.
+Soft “don’t worry” can stand the ladder down; “okay but hurt” will not. Fire TV Ambient Hearth copy says *same incident · Alexa+ agent remembers*; the rung rail stays human labels (`Alexa+ voice check-in ×2`).
 
 ## Quickstart (≤60s to something on screen)
 
