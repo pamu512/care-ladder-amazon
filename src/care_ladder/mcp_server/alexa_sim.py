@@ -15,10 +15,11 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
 import sys
 
 from mcp.client.session import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
 
 def _session_banner(payload: dict) -> str:
@@ -79,7 +80,16 @@ async def run_sim(
 ) -> tuple[list[str], dict]:
     """Drive one incident through the MCP tools; return (transcript, final state)."""
     log: list[str] = []
-    _streams = streamable_http_client(base_url.rstrip("/") + "/mcp")
+    token = os.environ.get("CARE_LADDER_API_TOKEN", "").strip()
+    http_client = (
+        create_mcp_http_client(headers={"Authorization": f"Bearer {token}"})
+        if token
+        else None
+    )
+    _streams = streamable_http_client(
+        base_url.rstrip("/") + "/mcp",
+        **({"http_client": http_client} if http_client is not None else {}),
+    )
     # SDK 2.x yields (read, write, get_session_id) - or (read, write) on older builds.
     async with _streams as streams:
         read, write = streams[0], streams[1]

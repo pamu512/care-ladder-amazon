@@ -16,6 +16,8 @@ fi
 
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8000}"
+# Loopback demo opt-out. Hosted/shared APIs must set CARE_LADDER_API_TOKEN instead.
+export CARE_LADDER_ALLOW_INSECURE_LOCAL="${CARE_LADDER_ALLOW_INSECURE_LOCAL:-1}"
 
 echo "Care Ladder demo API: http://${HOST}:${PORT}"
 echo "  Fire TV:  http://${HOST}:${PORT}/firetv/"

@@ -16,6 +16,8 @@ cd "$ROOT"
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8010}"
 BASE="http://${HOST}:${PORT}"
+# Loopback demo opt-out. Hosted/shared APIs must set CARE_LADDER_API_TOKEN instead.
+export CARE_LADDER_ALLOW_INSECURE_LOCAL="${CARE_LADDER_ALLOW_INSECURE_LOCAL:-1}"
 CHECK="${CHECK:-0}"
 # ponytail: single-household demo; upgrade if a second household shares the store.
 HOUSEHOLD="amazon-demo-1"

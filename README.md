@@ -56,7 +56,7 @@ pip install -e ".[dev]"
 Manual split (same coupling):
 
 ```bash
-.venv/bin/uvicorn care_ladder.api.app:app --port 8010
+CARE_LADDER_ALLOW_INSECURE_LOCAL=1 .venv/bin/uvicorn care_ladder.api.app:app --port 8010
 # Fire TV:  http://127.0.0.1:8010/firetv/     (Demo console, bottom right)
 # MCP:      POST http://127.0.0.1:8010/mcp    (Streamable HTTP)
 .venv/bin/python -m care_ladder.mcp_server.alexa_sim --url http://127.0.0.1:8010 --answer "don't worry"
@@ -79,10 +79,20 @@ Amazon household: `configs/amazon_demo_home.yaml` (resident + primary/secondary 
 Fire TV Demo console posts these fixtures to `/demo/run`. Or:
 
 ```bash
+# Local scripts set CARE_LADDER_ALLOW_INSECURE_LOCAL=1. Hosted: add the bearer.
 curl -s -X POST http://127.0.0.1:8010/demo/run \
   -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer ${CARE_LADDER_API_TOKEN}" \
   -d '{"fixture":"alexa_path_a_soft_ok"}'
 ```
+
+## API auth & camera sources
+
+`/mcp` and mutating routes (`POST /demo/run`, `/demo/upload`, `/demo/camera/start|stop`, incident ack, learning writes) require `Authorization: Bearer $CARE_LADDER_API_TOKEN`. If the token is unset those routes return **401** unless `CARE_LADDER_ALLOW_INSECURE_LOCAL=1` (loopback demo / pytest only). See [`.env.example`](.env.example).
+
+MCP Streamable HTTP has DNS-rebinding protection on (`Host` allowlist: localhost / `testserver` plus `CARE_LADDER_MCP_HOSTS` for an ALB hostname).
+
+`POST /demo/camera/start` accepts a device index, or an `rtsp`/`http(s)` URL whose host is `localhost` / `127.0.0.1` / `::1` or listed in `CARE_LADDER_CAMERA_HOSTS`. Cloud metadata IPs and arbitrary remote hosts are rejected.
 
 ## Privacy & fail-closed
 
