@@ -7,6 +7,8 @@
 
 Camera cue → multi-rung care ladder → **Alexa+** agent (self-hosted MCP) → **Fire TV** caregiver audit (silhouette-only). Wellness ladder, not a medical device.
 
+Product site: https://pamu512.github.io/care-ladder-amazon/
+
 ## Hackathon map
 
 Amazon **Build, Ship, Shape** (draft — no Final Submit).
