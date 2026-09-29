@@ -56,6 +56,18 @@ def test_firetv_served_with_calm_care_tech_tokens():
         # shipping copy: resident / primary contact — no personal names
         assert "the resident" in html
         assert "primary contact" in html
+        # A3: supporting living-room timeline, not the caregiver pager
+        assert "Fire TV living-room timeline" in html
+        assert "Ambient Hearth" in html
+        assert "Caregiver Dashboard" not in html
+        assert "Family informed on Alexa mobile" in html
+        assert "Archive on this TV (demo)" in html
+        assert "I'm on it - call her myself" in html
+        assert "Call Mom now" in html
+        assert "Can't take it - go to" in html
+        assert "id=\"mobileMirror\"" in html
+        assert "ev.at" in html
+        assert "Already acknowledged on Alexa mobile" in html
         # Rank 1: Ambient Hearth same-incident memory, human rail labels
         assert "same incident · Alexa+ agent remembers" in html
         assert "Alexa+ voice check-in ×2" in html
