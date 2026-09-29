@@ -14,11 +14,13 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 import json
+import os
 import sys
 
 from mcp.client.session import ClientSession
-from mcp.client.streamable_http import streamable_http_client
+from mcp.client.streamable_http import create_mcp_http_client, streamable_http_client
 
 
 def _session_banner(payload: dict) -> str:
@@ -79,88 +81,98 @@ async def run_sim(
 ) -> tuple[list[str], dict]:
     """Drive one incident through the MCP tools; return (transcript, final state)."""
     log: list[str] = []
-    _streams = streamable_http_client(base_url.rstrip("/") + "/mcp")
+    token = os.environ.get("CARE_LADDER_API_TOKEN", "").strip()
+    client_cm = (
+        create_mcp_http_client(headers={"Authorization": f"Bearer {token}"})
+        if token
+        else contextlib.nullcontext(None)
+    )
     # SDK 2.x yields (read, write, get_session_id) - or (read, write) on older builds.
-    async with _streams as streams:
-        read, write = streams[0], streams[1]
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            log.append("ALEXA+ agent initialized (MCP Streamable HTTP)")
-            if verbose:
-                print(log[-1])
+    async with client_cm as http_client:
+        _streams = streamable_http_client(
+            base_url.rstrip("/") + "/mcp",
+            **({"http_client": http_client} if http_client is not None else {}),
+        )
+        async with _streams as streams:
+            read, write = streams[0], streams[1]
+            async with ClientSession(read, write) as session:
+                await session.initialize()
+                log.append("ALEXA+ agent initialized (MCP Streamable HTTP)")
+                if verbose:
+                    print(log[-1])
 
-            started = await _call(
-                session, "start_or_resume_incident", {"cue_kind": cue_kind}, log
-            )
-            iid = started["incident_id"]
-            snap = started.get("session_snapshot") or {}
-            hh = snap.get("household_id") or started.get("household_id") or "amazon-demo-1"
-            # Same household+incident: prove the agent resumes memory, not a new FAQ turn.
-            await _call(
-                session,
-                "start_or_resume_incident",
-                {"cue_kind": cue_kind, "household_id": hh, "incident_id": iid},
-                log,
-            )
-
-            if answer:
-                chk = await _call(
+                started = await _call(
+                    session, "start_or_resume_incident", {"cue_kind": cue_kind}, log
+                )
+                iid = started["incident_id"]
+                snap = started.get("session_snapshot") or {}
+                hh = snap.get("household_id") or started.get("household_id") or "amazon-demo-1"
+                # Same household+incident: prove the agent resumes memory, not a new FAQ turn.
+                await _call(
                     session,
-                    "check_in_prompt",
-                    {"household_id": hh, "incident_id": iid, "utterance": answer},
+                    "start_or_resume_incident",
+                    {"cue_kind": cue_kind, "household_id": hh, "incident_id": iid},
                     log,
                 )
-                intent = chk.get("response_intent")
-                log.append(
-                    f"ALEXA+ intent {intent} ({chk.get('intent_label')}) "
-                    f"raw={chk.get('raw')!r}"
-                )
-                if intent == "clear_ok":
-                    final = await _call(
-                        session,
-                        "resolve_incident",
-                        {"household_id": hh, "incident_id": iid, "reason": "voice_ok"},
-                        log,
-                    )
-                    return log, final
-                if intent == "needs_human":
-                    await _call(
-                        session,
-                        "notify_caretaker",
-                        {"household_id": hh, "incident_id": iid},
-                        log,
-                    )
-                    cared = await _maybe_caregiver(
-                        session, hh, iid, caregiver_answer, caregiver_outcome, log
-                    )
-                    if cared is not None:
-                        return log, cared
-                    status = await _call(
-                        session,
-                        "get_incident_status",
-                        {"household_id": hh, "incident_id": iid},
-                        log,
-                    )
-                    return log, status
-                # unclear: same as no clear answer — fall through to notify
 
-            # silence path: wait window closes -> notify -> caregiver ack or call
-            status = await _call(
-                session, "get_incident_status", {"household_id": hh, "incident_id": iid}, log
-            )
-            await _call(session, "notify_caretaker", {"household_id": hh, "incident_id": iid}, log)
-            cared = await _maybe_caregiver(
-                session, hh, iid, caregiver_answer, caregiver_outcome, log
-            )
-            if cared is not None:
-                return log, cared
-            call = await _call(
-                session, "request_call", {"household_id": hh, "incident_id": iid}, log
-            )
-            log.append(
-                f"Call requested to {call.get('phone_e164')} (simulated={call.get('simulated')})"
-            )
-            return log, status
+                if answer:
+                    chk = await _call(
+                        session,
+                        "check_in_prompt",
+                        {"household_id": hh, "incident_id": iid, "utterance": answer},
+                        log,
+                    )
+                    intent = chk.get("response_intent")
+                    log.append(
+                        f"ALEXA+ intent {intent} ({chk.get('intent_label')}) "
+                        f"raw={chk.get('raw')!r}"
+                    )
+                    if intent == "clear_ok":
+                        final = await _call(
+                            session,
+                            "resolve_incident",
+                            {"household_id": hh, "incident_id": iid, "reason": "voice_ok"},
+                            log,
+                        )
+                        return log, final
+                    if intent == "needs_human":
+                        await _call(
+                            session,
+                            "notify_caretaker",
+                            {"household_id": hh, "incident_id": iid},
+                            log,
+                        )
+                        cared = await _maybe_caregiver(
+                            session, hh, iid, caregiver_answer, caregiver_outcome, log
+                        )
+                        if cared is not None:
+                            return log, cared
+                        status = await _call(
+                            session,
+                            "get_incident_status",
+                            {"household_id": hh, "incident_id": iid},
+                            log,
+                        )
+                        return log, status
+                    # unclear: same as no clear answer — fall through to notify
+
+                # silence path: wait window closes -> notify -> caregiver ack or call
+                status = await _call(
+                    session, "get_incident_status", {"household_id": hh, "incident_id": iid}, log
+                )
+                await _call(session, "notify_caretaker", {"household_id": hh, "incident_id": iid}, log)
+                cared = await _maybe_caregiver(
+                    session, hh, iid, caregiver_answer, caregiver_outcome, log
+                )
+                if cared is not None:
+                    return log, cared
+                call = await _call(
+                    session, "request_call", {"household_id": hh, "incident_id": iid}, log
+                )
+                log.append(
+                    f"Call requested to {call.get('phone_e164')} (simulated={call.get('simulated')})"
+                )
+                return log, status
 
 
 def main() -> int:

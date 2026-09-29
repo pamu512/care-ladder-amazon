@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hmac
 import os
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,11 +13,21 @@ import numpy as np
 import asyncio
 
 from fastapi import FastAPI, HTTPException, Response, UploadFile
+from fastapi.responses import JSONResponse
 from uuid import uuid4
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.requests import Request
 
 from care_ladder.audit.store import AuditStore
+from care_ladder.security import (
+    auth_required,
+    bearer_token,
+    configured_token,
+    mcp_allowed_hosts,
+    redact_phones,
+    validate_camera_source,
+)
 from care_ladder.channels.dial import StubDialer
 from care_ladder.cloud.sinks import CloudSinks
 from care_ladder.channels.speaker import SpeakerSimulator
@@ -462,6 +473,28 @@ async def _run_opencv_pose_person(store: AuditStore):
 _UPLOAD_JOBS: dict[str, dict[str, Any]] = {}
 
 
+def _is_gated_path(method: str, path: str) -> bool:
+    """MCP + mutating / caregiver-sensitive writes. Read-only polls stay open."""
+    normalized = path.rstrip("/") or "/"
+    if normalized == "/mcp" or normalized.startswith("/mcp/"):
+        return True
+    if method != "POST":
+        return False
+    if normalized in {
+        "/demo/run",
+        "/demo/upload",
+        "/demo/camera/start",
+        "/demo/camera/stop",
+    }:
+        return True
+    parts = [p for p in normalized.split("/") if p]
+    if len(parts) == 3 and parts[0] == "incidents" and parts[2] == "ack":
+        return True
+    if len(parts) == 3 and parts[0] == "learning" and parts[2] in {"freeze", "reset", "settle"}:
+        return True
+    return False
+
+
 def create_app(store: AuditStore | None = None) -> FastAPI:
     """Build FastAPI app with injectable store (tests inject a fresh memory store)."""
     audit = store if store is not None else _default_store()
@@ -471,6 +504,26 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
         version="0.1.0",
     )
     application.state.store = audit
+
+    if auth_required() and configured_token() is None:
+        print(
+            "WARNING: CARE_LADDER_API_TOKEN unset; /mcp and mutating routes return 401. "
+            "Set the token, or CARE_LADDER_ALLOW_INSECURE_LOCAL=1 for loopback demo."
+        )
+
+    @application.middleware("http")
+    async def _require_api_token(request: Request, call_next):
+        if not _is_gated_path(request.method, request.url.path):
+            return await call_next(request)
+        if not auth_required():
+            return await call_next(request)
+        expected = configured_token()
+        if expected is None:
+            return JSONResponse({"detail": "API token required"}, status_code=401)
+        provided = bearer_token(request.headers.get("authorization"))
+        if not provided or not hmac.compare_digest(provided, expected):
+            return JSONResponse({"detail": "unauthorized"}, status_code=401)
+        return await call_next(request)
 
     static_dir = Path(__file__).resolve().parent / "static"
     application.mount("/ui", StaticFiles(directory=static_dir, html=True), name="ui")
@@ -493,7 +546,8 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
         stateless_http=True,
         streamable_http_path="/",
         transport_security=TransportSecuritySettings(
-            enable_dns_rebinding_protection=False
+            enable_dns_rebinding_protection=True,
+            allowed_hosts=mcp_allowed_hosts(),
         ),
     )
     application.mount("/mcp", _mcp_asgi)
@@ -557,18 +611,7 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
         """Current demo care plan (phone numbers redacted) for the console's
         full-ladder rail: shows never-reached rungs (e.g. emergency fail-closed)."""
         plan = load_care_plan(_DEMO_PLAN_PATH)
-
-        def _redact(phone: str | None) -> str | None:
-            if not phone:
-                return phone
-            return f"****{phone[-2:]}" if len(phone) >= 2 else "****"
-
-        data = plan.model_dump()
-        for key in ("caregiver", "secondary", "monitored"):
-            contact = data.get(key)
-            if contact and contact.get("phone_e164"):
-                contact["phone_e164"] = _redact(contact["phone_e164"])
-        return data
+        return redact_phones(plan.model_dump())
 
     @application.get("/mcp-agent")
     def mcp_agent() -> dict[str, Any]:
@@ -588,7 +631,8 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
         if incident is None:
             raise HTTPException(status_code=404, detail="incident not found")
         # Full timeline JSON: ordered audit events (cue → tools → resolve/jump).
-        return incident.model_dump()
+        # Phones stay in the store; unauthenticated GET never serves them raw.
+        return redact_phones(incident.model_dump())
 
     @application.post("/incidents/{incident_id}/ack")
     def ack_incident(incident_id: str, body: dict[str, Any] | None = None) -> dict[str, Any]:
@@ -805,8 +849,10 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
 
         body = body or {}
         source = body.get("source", 0)
-        if isinstance(source, str) and not source.startswith(("rtsp://", "http://", "https://")):
-            raise HTTPException(status_code=400, detail="source must be a device index or rtsp/http URL")
+        try:
+            validate_camera_source(source)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
         plan = load_care_plan(_DEMO_PLAN_PATH)
         plan.triggers.no_movement.timeout_sec = min(plan.triggers.no_movement.timeout_sec, 30)

@@ -16,6 +16,10 @@ fi
 
 HOST="${HOST:-127.0.0.1}"
 PORT="${PORT:-8000}"
+# Opt-out only when binding loopback. Hosted/shared APIs must set CARE_LADDER_API_TOKEN.
+if [[ "${HOST}" == "127.0.0.1" || "${HOST}" == "localhost" || "${HOST}" == "::1" ]]; then
+  export CARE_LADDER_ALLOW_INSECURE_LOCAL="${CARE_LADDER_ALLOW_INSECURE_LOCAL:-1}"
+fi
 
 echo "Care Ladder demo API: http://${HOST}:${PORT}"
 echo "  Fire TV:  http://${HOST}:${PORT}/firetv/"

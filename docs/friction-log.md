@@ -56,7 +56,9 @@ first try once mounted correctly.
    HTTP 421 Misdirected Request for non-Host-header clients (including test
    transports). Behind an ALB/CloudFront the Host header differs from
    127.0.0.1, so we disabled it explicitly via
-   `TransportSecuritySettings(enable_dns_rebinding_protection=False)`. The
+   `TransportSecuritySettings(enable_dns_rebinding_protection=False)`.
+   Later re-enabled with a Host allowlist (`localhost` / `testserver` plus
+   `CARE_LADDER_MCP_HOSTS` for ALB/CloudFront). The
    default is good security for standalone servers; confusing when mounted.
    See [CloudFront / ALB `/mcp`](#cloudfrontalbs-mcp--local-only-in-the-video).
    - **Severity:** Medium (tests and any non-localhost Host die with 421
