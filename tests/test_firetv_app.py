@@ -54,6 +54,17 @@ def test_firetv_served_with_calm_care_tech_tokens():
         # shipping copy: resident / primary contact — no personal names
         assert "the resident" in html
         assert "primary contact" in html
+        # Rank 1: Ambient Hearth same-incident memory, human rail labels
+        assert "same incident · Alexa+ agent remembers" in html
+        assert "Alexa+ voice check-in ×2" in html
+        # transcript keeps intent + raw on soft OK / needs-human
+        assert "d.reply_raw" in html and "d.intent_label" in html
+        assert "t-intent" in html
+        assert html.index("renderTranscript(inc)") < html.index("phase === 'resolved'")
+        # quiet MCP flag for judge zoom; timestamps stay mono
+        assert "via mcp" in html
+        assert "d.via === 'mcp'" in html or 'd.via === "mcp"' in html
+        assert "--font-mono" in html
 
 
 def test_firetv_flow_path_a_then_ack():

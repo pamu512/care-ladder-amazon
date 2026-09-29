@@ -536,7 +536,7 @@
   const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
   const EMPTY_NOTE = 'No check-in running. The last one resolved at 11:02 — the resident answered on the first attempt.';
-  const ALLCLEAR_SUB = 'The resident settled after lunch · living room. The ladder is watching and will confirm before it ever escalates.';
+  const ALLCLEAR_SUB = 'The resident settled after lunch · living room. same incident · Alexa+ agent remembers · the ladder will confirm before it ever escalates.';
   const LOCKED_MSG = 'Hard-locked in this build — a live install would require re-enabling in care plan settings';
 
   const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -580,16 +580,19 @@
   }
   function auditMsg(ev) {
     const d = ev.detail || {};
+    const via = d.via === 'mcp' ? 'via mcp · ' : '';
+    let msg;
     switch (ev.tool) {
-      case 'cue': return `${ev.cue_kind || ''} cue`;
-      case 'alexa_checkin': return `attempt ${d.attempt || 1} · ${d.intent_label || (d.reply_kind === 'ok' ? 'answered' : 'no speech')}`;
-      case 'wait_window': return `wait closed · ${d.sec || 45}s`;
-      case 'notify_caretaker': return `caretaker notified · ${(d.channels || []).join(' + ')}`;
-      case 'request_call': return `call requested · simulated`;
-      case 'jump': return `skipped · ${d.reason || ''}`;
-      case 'resolve': return `resolved · ${d.reason || ''}`;
-      default: return ev.tool;
+      case 'cue': msg = `${ev.cue_kind || ''} cue`; break;
+      case 'alexa_checkin': msg = `attempt ${d.attempt || 1} · ${d.intent_label || (d.reply_kind === 'ok' ? 'answered' : 'no speech')}`; break;
+      case 'wait_window': msg = `wait closed · ${d.sec || 45}s`; break;
+      case 'notify_caretaker': msg = `caretaker notified · ${(d.channels || []).join(' + ')}`; break;
+      case 'request_call': msg = `call requested · simulated`; break;
+      case 'jump': msg = `skipped · ${d.reason || ''}`; break;
+      case 'resolve': msg = `resolved · ${d.reason || ''}`; break;
+      default: msg = ev.tool;
     }
+    return via + msg;
   }
 
   function renderTranscript(inc) {
@@ -736,7 +739,7 @@
       setPill('info', 'Camera blocked'); setChip('info', 'Rung 1 · Holding');
       $('heroTitle').textContent = 'Camera is blocked — checking on the resident';
       const informed = notify ? 'the primary contact is being informed now.' : 'Nothing escalates while the room can\'t be read.';
-      $('heroSub').textContent = 'Coverage reads as privacy, not distress — ' + informed;
+      $('heroSub').textContent = 'same incident · Alexa+ agent remembers · coverage reads as privacy, not distress — ' + informed;
       $('silLabel').textContent = 'No reading · lens covered';
       $('silNote').textContent = 'Living room · last reading 6 min ago';
       if (notify) {
@@ -757,7 +760,7 @@
       setPill('ok', 'Resolved'); setChip('ok', 'Resolved · acknowledged');
       $('heroTitle').textContent = resolve && resolve.detail && resolve.detail.reason === 'alexa_checkin_ok'
         ? 'The resident has responded' : 'Acknowledged — you took it from here';
-      $('heroSub').textContent = 'The ladder stands down. The incident and its full trail stay in the audit log.';
+      $('heroSub').textContent = 'same incident · Alexa+ agent remembers. The ladder stands down; the trail stays.';
       $('pushNote').hidden = true;
       $('silLabel').textContent = 'Silhouette · processed on device';
       $('silNote').textContent = 'Living room · all quiet';
@@ -774,13 +777,13 @@
       const lastIntent = lastChk && lastChk.detail && lastChk.detail.response_intent;
       if (lastIntent === 'needs_human') {
         $('heroTitle').textContent = 'The resident answered — still needs a human';
-        $('heroSub').textContent = 'Reply is mixed or concerning · the ladder did not clear · the primary contact is being informed.';
+        $('heroSub').textContent = 'same incident · Alexa+ agent remembers · reply is mixed or concerning · the ladder did not clear.';
       } else if (lastIntent === 'unclear') {
         $('heroTitle').textContent = 'The reply was unclear · calling the primary contact';
-        $('heroSub').textContent = 'No clear answer after the voice check-in · the primary contact is being informed now.';
+        $('heroSub').textContent = 'same incident · Alexa+ agent remembers · no clear answer after the voice check-in · the primary contact is being informed now.';
       } else {
         $('heroTitle').textContent = 'The resident has not responded · calling the primary contact';
-        $('heroSub').textContent = 'Two voice attempts · 45 seconds of silence · the primary contact is being informed now.';
+        $('heroSub').textContent = 'same incident · Alexa+ agent remembers · two voice attempts · 45 seconds of silence · the primary contact is being informed now.';
       }
       $('pushNote').hidden = false;
       $('pushText').textContent = 'Push sent to the primary contact\'s phone · this TV · ' + fmtClock();
@@ -806,8 +809,8 @@
       setChip('attend', waiting ? 'Rung 3 · Listen window' : 'Rung 2 · Voice check-in');
       $('heroTitle').textContent = 'Alexa+ is checking on the resident';
       $('heroSub').textContent = waiting
-        ? 'Both attempts quiet · 45 second listen window running.'
-        : 'A gentle voice check-in · two attempts, then a 45 second listen window.';
+        ? 'same incident · Alexa+ agent remembers · both attempts quiet · 45 second listen window running.'
+        : 'same incident · Alexa+ agent remembers · two attempts, then a 45 second listen window.';
       $('pushNote').hidden = true;
       $('silLabel').textContent = 'Silhouette · processed on device';
       $('silNote').textContent = 'Living room · listening now';
@@ -821,7 +824,7 @@
     setPresenceArt('bust');
     setPill('info', 'Re-checking'); setChip('info', 'Rung 1 · Re-perceive');
     $('heroTitle').textContent = 'The resident has not moved in 4 minutes';
-    $('heroSub').textContent = 'Living room · re-checking the camera view.';
+    $('heroSub').textContent = 'same incident · Alexa+ agent remembers · living room · re-checking the camera view.';
     $('pushNote').hidden = true;
     $('silLabel').textContent = 'Silhouette · processed on device';
     $('silNote').textContent = 'Living room · re-checking now';
