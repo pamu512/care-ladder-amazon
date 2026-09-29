@@ -46,7 +46,7 @@ own; silhouette-only video.
   hold-to-review hard-locked.
 
 ## Tool feedback (friction log summary)
-Full log: `docs/friction-log.md`. Highlights:
+Full log: `docs/friction-log.md` (paste-ready block at the bottom). Highlights:
 1. mcp SDK v2 renamed FastMCP → MCPServer with a hard import error; the
    migration guide is good but the v2 import path should outrank v1 examples
    in search.
@@ -56,6 +56,13 @@ Full log: `docs/friction-log.md`. Highlights:
    would save embedders an hour.
 3. DNS-rebinding protection defaults ON for localhost hosts and returns 421
    behind an ALB; needed explicit TransportSecuritySettings override.
+4. FastAPI mount 307: `POST /mcp` → `/mcp/`. curl without `-L` looks dead;
+   client snippets should show the trailing slash.
+5. Fire TV / Silk (1280×720 Chromium fallback; no stick this pass): notify
+   clips the footer at 720p; D-pad ring misses hero cards; emergency hold is
+   pointer-only; Silk `display:flex` beats `[hidden]` without `!important`.
+6. CloudFront `/mcp` and `/firetv/` 404 on the shared opencv host — local-only
+   MCP in the video. Do not send judges to `d2u7pls4da2poz.cloudfront.net/mcp`.
 
 ## Privacy & safety (visible in product)
 - Silhouette-only on the Fire TV; frames privacy-transformed before persist.
