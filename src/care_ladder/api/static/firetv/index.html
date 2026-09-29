@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Care Ladder · Fire TV Caregiver Dashboard</title>
+<!--
+  Care Ladder Fire TV caregiver dashboard — Ambient Hearth production port.
+  Layout from Concept A (presence panel, first-class ladder rail, TV-scale type).
+  Behavior stays API-driven: /incidents, /plan, /demo/run, detection frames.
+  Fonts are self-hosted woff2 (Silk-friendly; no Google runtime dependency).
+-->
+<style>
+  /* latin variable faces, OFL, vendored next to this file */
+  @font-face {
+    font-family: "Instrument Sans";
+    font-style: normal;
+    font-weight: 400 700;
+    font-stretch: 100%;
+    font-display: swap;
+    src: url("./fonts/instrument-sans-latin.woff2") format("woff2");
+  }
+  @font-face {
+    font-family: "JetBrains Mono";
+    font-style: normal;
+    font-weight: 400 500;
+    font-display: swap;
+    src: url("./fonts/jetbrains-mono-latin.woff2") format("woff2");
+  }
+  :root {
+    --bg: #24221E;
+    --bg-deep: #1E1C18;
+    --surface: #2E2B25;
+    --surface-2: #35322A;
+    --ink: #EFEAE2;
+    --ink-60: rgba(239,234,226,0.62);
+    --ink-70: rgba(239,234,226,0.74);
+    --ink-40: rgba(239,234,226,0.40);
+    --ink-25: rgba(239,234,226,0.25);
+    --line: rgba(239,234,226,0.09);
+    --sage: #A8B5A0;
+    --sage-dim: rgba(168,181,160,0.16);
+    --amber: #D9A05B;
+    --amber-dim: rgba(217,160,91,0.16);
+    --clay: #D98873;
+    --clay-dim: rgba(217,136,115,0.13);
+    --slate: #9DB0C7;
+    --slate-dim: rgba(157,176,199,0.14);
+    --font-sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    --focus: 0 0 0 3px #24221E, 0 0 0 6px var(--amber), 0 12px 30px rgba(0,0,0,0.38);
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 18px;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+    min-height: 100vh;
+  }
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* Silk / author-CSS: a display:flex rule otherwise wins over the hidden attribute */
+  [hidden] { display: none !important; }
+
+  .atmo { position: fixed; inset: 0; pointer-events: none; transition: opacity 0.6s ease-out; }
+  .atmo-warm {
+    background:
+      radial-gradient(1100px 540px at 16% -10%, rgba(217,160,91,0.10), transparent 62%),
+      radial-gradient(900px 500px at 102% 112%, rgba(168,181,160,0.07), transparent 58%),
+      radial-gradient(760px 420px at 55% 46%, rgba(217,136,115,0.030), transparent 65%);
+  }
+  .atmo-attend {
+    opacity: 0;
+    background:
+      radial-gradient(1000px 520px at 22% -6%, rgba(217,160,91,0.16), transparent 60%),
+      radial-gradient(820px 460px at 88% 116%, rgba(217,160,91,0.085), transparent 58%);
+  }
+  .atmo-urgent {
+    opacity: 0;
+    background:
+      radial-gradient(1000px 540px at 20% -8%, rgba(217,136,115,0.17), transparent 60%),
+      radial-gradient(860px 480px at 90% 114%, rgba(217,136,115,0.10), transparent 58%);
+  }
+  .atmo-ok {
+    opacity: 0;
+    background:
+      radial-gradient(1000px 520px at 18% -6%, rgba(168,181,160,0.12), transparent 60%),
+      radial-gradient(760px 420px at 96% 112%, rgba(168,181,160,0.07), transparent 58%);
+  }
+  body[data-phase="recheck"] .atmo-attend,
+  body[data-phase="checkin"] .atmo-attend,
+  body[data-phase="occluded"] .atmo-attend { opacity: 1; }
+  body[data-phase="notify"] .atmo-urgent { opacity: 1; }
+  body[data-phase="resolved"] .atmo-ok { opacity: 1; }
+
+  .tv {
+    position: relative; z-index: 1;
+    width: min(100%, 1280px);
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex; flex-direction: column;
+  }
+
+  .topbar {
+    display: flex; align-items: center; gap: 16px;
+    padding: 11px 44px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 11px; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 9px;
+    background: var(--amber); color: #24221E;
+    display: grid; place-items: center;
+  }
+  .brand-mark svg { width: 17px; height: 17px; }
+  .brand-name { font-size: 16.5px; font-weight: 700; letter-spacing: -0.01em; }
+  .top-meta { font-size: 14px; color: var(--ink-60); }
+  .top-spacer { flex: 1; }
+  .learn-pill {
+    display: inline-flex; align-items: center; gap: 7px;
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; letter-spacing: 0.03em;
+    border: 1px solid var(--line); color: var(--ink-60);
+    cursor: default;
+  }
+  .learn-pill .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .learn-pill[data-phase="rapid"] { background: var(--amber-dim); color: var(--amber); border-color: transparent; }
+  .learn-pill[data-phase="settled"] { background: var(--sage-dim); color: var(--sage); border-color: transparent; }
+  .learn-pill[data-phase="frozen"] { color: var(--ink-40); }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 9px;
+    padding: 8px 17px; border-radius: 999px;
+    font-size: 13.5px; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid transparent;
+    transition: background 0.3s, color 0.3s;
+  }
+  .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; animation: dotBreathe 6s ease-in-out infinite; }
+  .status-pill.ok { background: var(--sage-dim); color: var(--sage); }
+  .status-pill.attend { background: var(--amber-dim); color: var(--amber); }
+  .status-pill.urgent { background: var(--clay-dim); color: var(--clay); }
+  .status-pill.info { background: var(--slate-dim); color: var(--slate); }
+  .clock { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 15px; color: var(--ink-60); }
+
+  .main {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: clamp(20px, 2.4vw, 34px);
+    padding: clamp(10px, 2vh, 26px) 44px 8px;
+    align-items: center;
+  }
+  .hero { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
+  .hero:focus { outline: none; }
+  .hero-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: clamp(10px, 1.8vh, 18px); }
+  .rung-chip { padding: 7px 16px; border-radius: 999px; font-size: 13.5px; font-weight: 600; }
+  .rung-chip.ok { background: var(--sage-dim); color: var(--sage); }
+  .rung-chip.attend { background: var(--amber-dim); color: var(--amber); }
+  .rung-chip.urgent { background: var(--clay-dim); color: var(--clay); }
+  .rung-chip.info { background: var(--slate-dim); color: var(--slate); }
+  .inc-id { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--ink-40); }
+  .hero-title {
+    font-size: clamp(30px, 3.5vw, 46px);
+    font-weight: 700; letter-spacing: -0.022em; line-height: 1.06;
+    overflow-wrap: break-word;
+  }
+  body[data-phase="allclear"] .hero-title { font-size: clamp(34px, 4.4vw, 56px); }
+  .hero-sub {
+    margin-top: clamp(10px, 1.8vh, 16px);
+    font-size: clamp(17px, 1.6vw, 20px);
+    line-height: 1.5; color: var(--ink-70); max-width: 36ch;
+  }
+  .actions { display: flex; gap: 14px; flex-wrap: wrap; margin-top: clamp(16px, 2.6vh, 26px); }
+  .btn {
+    min-height: 58px; padding: 0 30px;
+    border-radius: 14px; border: 1.5px solid transparent;
+    font-family: inherit; font-size: 18px; font-weight: 600;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 10px;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.2s, border-color 0.2s;
+  }
+  .btn svg { width: 19px; height: 19px; }
+  .btn-primary { background: var(--amber); color: #24221E; }
+  .btn-primary:hover { background: #E3AD6C; }
+  .btn-ghost, .btn-secondary { background: rgba(239,234,226,0.05); color: var(--ink); border-color: rgba(239,234,226,0.22); }
+  .btn-ghost:hover, .btn-secondary:hover { border-color: rgba(239,234,226,0.4); }
+  .btn-danger-off { background: transparent; color: var(--ink-60); border: 1.5px dashed rgba(239,234,226,0.30); }
+  .btn:focus-visible, .console-btn:focus-visible, .console-toggle:focus-visible,
+  .gate-hold:focus-visible, .gate-cancel:focus-visible, .hero:focus-visible, .presence:focus-visible,
+  .btn.focused, .console-btn.focused, .console-toggle.focused,
+  .gate-hold.focused, .gate-cancel.focused {
+    outline: none; box-shadow: var(--focus);
+  }
+  .btn.focused, .btn:focus-visible { transform: translateY(-2px) scale(1.02); }
+  .push-note {
+    display: flex; align-items: center; gap: 11px;
+    margin-top: 16px; padding: 11px 16px;
+    border-radius: 12px;
+    background: rgba(239,234,226,0.045); border: 1px solid var(--line);
+    font-size: 15px; color: var(--ink-70);
+  }
+  .push-note svg { width: 17px; height: 17px; stroke: var(--slate); flex-shrink: 0; }
+
+  .presence {
+    background: rgba(46,43,37,0.55);
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 12px 24px 14px;
+    display: flex; flex-direction: column; min-width: 0;
+  }
+  .presence:focus { outline: none; }
+  .pres-stage { position: relative; height: clamp(92px, 15vh, 150px); display: grid; place-items: center; }
+  .pres-glow {
+    position: absolute; width: min(250px, 92%); aspect-ratio: 1; border-radius: 50%;
+    background: radial-gradient(circle, var(--glowc, rgba(168,181,160,0.16)), transparent 68%);
+    transition: background 0.5s;
+  }
+  .pres-glow.tone-sage  { --glowc: rgba(168,181,160,0.17); }
+  .pres-glow.tone-amber { --glowc: rgba(217,160,91,0.20); }
+  .pres-glow.tone-clay  { --glowc: rgba(217,136,115,0.19); }
+  .pres-glow.tone-slate { --glowc: rgba(157,176,199,0.15); }
+  body[data-live="1"] .pres-glow { animation: breathe 6s ease-in-out infinite; }
+  .pres-art { width: clamp(92px, 16vh, 128px); height: auto; position: relative; }
+  .sil-frame { max-width: 72%; max-height: 140px; border-radius: 10px; object-fit: contain; position: relative; z-index: 1; }
+  .pres-label { margin-top: 8px; text-align: center; font-size: 12px; letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-40); }
+  .pres-note { margin-top: 5px; text-align: center; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; color: var(--ink-40); }
+  .transcript { margin-top: 10px; border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; gap: 7px; }
+  .t-title, .transcript-title { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-40); font-weight: 600; }
+  .t-line, .t-row { padding: 6px 12px; background: rgba(239,234,226,0.04); border-radius: 10px; display: flex; flex-direction: column; gap: 1px; }
+  .t-who { font-size: 11.5px; color: var(--ink-40); }
+  .t-what { font-size: 14.5px; line-height: 1.35; }
+  .t-line.silence .t-what { color: var(--ink-60); font-style: italic; }
+  .t-intent {
+    margin-top: 3px;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    font-weight: 600;
+  }
+  .t-intent.ok { color: var(--sage); }
+  .t-intent.human { color: var(--clay); }
+  .t-intent.unclear { color: var(--amber); }
+  .t-empty { font-size: 14px; color: var(--ink-70); font-style: italic; line-height: 1.5; }
+
+  .rail {
+    margin: 4px 44px 10px;
+    padding: 13px 24px 11px;
+    background: rgba(46,43,37,0.55);
+    border: 1px solid var(--line);
+    border-radius: 20px;
+  }
+  .rail-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .rail-title { font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-40); font-weight: 600; }
+  .rail-cap { font-size: 14px; color: var(--ink-70); }
+  .rail-track { display: flex; gap: 18px; }
+  .rung { flex: 1 1 0; min-width: 0; position: relative; animation: rungIn 0.3s ease-out both; animation-delay: calc(var(--i) * 80ms); }
+  .rung.active { flex: 1.7 1 0; }
+  .rung::after { content: ""; position: absolute; top: 11px; left: 33px; right: -16px; height: 2px; background: rgba(239,234,226,0.10); border-radius: 2px; }
+  .rung:last-child::after { display: none; }
+  .rung.done::after { background: rgba(239,234,226,0.17); }
+  .rung.off::after { background: none; height: 0; border-top: 2px dashed rgba(239,234,226,0.16); }
+  .rung-node {
+    width: 24px; height: 24px; border-radius: 50%;
+    display: grid; place-items: center; position: relative; z-index: 1;
+    font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px;
+    border: 1.5px dashed transparent;
+  }
+  .rung.done .rung-node { background: var(--surface-2); color: var(--ink-40); border-color: var(--line); }
+  .rung.done .rung-node svg { width: 13px; height: 13px; }
+  .rung.active .rung-node {
+    background: var(--amber); color: #24221E; font-weight: 700;
+    box-shadow: 0 0 0 5px var(--amber-dim), 0 0 22px rgba(217,160,91,0.30);
+  }
+  .rung.pending .rung-node { color: var(--ink-25); border: 1.5px solid rgba(239,234,226,0.20); }
+  .rung.off .rung-node { color: var(--ink-25); border: 1.5px dashed rgba(239,234,226,0.26); }
+  .rung-id { margin-top: 8px; font-family: var(--font-mono); font-size: 11px; color: var(--ink-25); }
+  .rung-name { margin-top: 2px; font-size: 15px; font-weight: 600; line-height: 1.25; color: var(--ink); overflow-wrap: break-word; }
+  .rung.pending .rung-name, .rung.off .rung-name { color: var(--ink-40); font-weight: 500; }
+  .rung-msg { margin-top: 4px; font-size: 13px; line-height: 1.3; color: var(--amber); }
+  .audit { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; gap: 14px; align-items: baseline; }
+  .audit-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-40); font-weight: 600; white-space: nowrap; }
+  .audit-flow, .audit-events { display: flex; flex-wrap: wrap; gap: 3px 9px; align-items: baseline; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; line-height: 1.65; }
+  .a-ev { white-space: nowrap; }
+  .a-sep { color: var(--ink-25); }
+  .a-r { font-family: var(--font-mono); font-size: 12px; }
+  .a-m { font-size: 12.5px; color: var(--ink-60); }
+
+  .foot {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    padding: 11px 44px 15px;
+    border-top: 1px solid var(--line);
+    font-size: 13.5px; color: var(--ink-40);
+  }
+  .foot .sep { color: var(--ink-25); }
+  .console-toggle {
+    margin-left: auto; min-height: 44px; padding: 8px 18px;
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    color: var(--ink-60); font-family: inherit; font-size: 13px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .console-toggle:hover { border-color: var(--ink-25); color: var(--ink); }
+  .console-toggle svg { width: 14px; height: 14px; }
+
+  .console {
+    position: fixed; right: 20px; bottom: 64px; z-index: 50;
+    width: 330px; max-width: calc(100vw - 32px);
+    background: #26231E; border: 1px solid rgba(239,234,226,0.14);
+    border-radius: 16px; padding: 16px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    display: none; flex-direction: column; gap: 9px;
+  }
+  .console.open { display: flex; }
+  .console-title { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--amber); font-weight: 600; }
+  .console-hint { font-size: 12px; color: var(--ink-40); line-height: 1.5; margin-bottom: 3px; }
+  .console-btn {
+    min-height: 48px; padding: 9px 14px; text-align: left;
+    background: rgba(239,234,226,0.045); border: 1px solid var(--line); border-radius: 11px;
+    color: var(--ink); font-family: inherit; font-size: 13.5px; cursor: pointer;
+    transition: border-color 0.15s;
+  }
+  .console-btn:hover { border-color: var(--amber); }
+  .console-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .console-btn b { font-weight: 600; display: block; }
+  .console-btn span { color: var(--ink-40); display: block; margin-top: 2px; font-size: 11.5px; }
+
+  .gate-backdrop {
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(20,18,15,0.82);
+    display: none; align-items: center; justify-content: center; padding: 20px;
+  }
+  .gate-backdrop.open { display: flex; }
+  .gate {
+    width: min(600px, 100%);
+    background: var(--surface); border: 1px solid rgba(217,136,115,0.4);
+    border-radius: 18px; padding: 30px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .gate-title { font-size: 24px; font-weight: 700; color: var(--clay); display: flex; align-items: center; gap: 11px; }
+  .gate-title svg { width: 21px; height: 21px; }
+  .gate-body { font-size: 15.5px; color: var(--ink-70); line-height: 1.6; }
+  .gate-hold {
+    min-height: 58px; border-radius: 13px;
+    border: 1.5px dashed rgba(217,136,115,0.6);
+    background: transparent; color: var(--clay);
+    font-family: inherit; font-size: 15.5px; font-weight: 600; cursor: pointer;
+    position: relative; overflow: hidden;
+  }
+  .gate-hold .progress { position: absolute; inset: 0; width: 0%; background: rgba(217,136,115,0.22); pointer-events: none; }
+  .gate-hold .lbl { position: relative; }
+  .gate-cancel {
+    align-self: flex-end; min-height: 44px; padding: 8px 14px;
+    background: none; border: none; color: var(--ink-40);
+    font-family: inherit; font-size: 14px; cursor: pointer;
+  }
+  .gate-cancel:hover { color: var(--ink); }
+
+  .toast {
+    position: fixed; bottom: 64px; left: 50%;
+    transform: translateX(-50%) translateY(8px);
+    background: #191713; color: var(--ink);
+    border: 1px solid rgba(239,234,226,0.14);
+    padding: 12px 22px; border-radius: 999px; font-size: 14px;
+    opacity: 0; pointer-events: none;
+    transition: opacity 0.25s, transform 0.25s;
+    z-index: 80; box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @keyframes rungIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @keyframes breathe { 0%, 100% { transform: scale(1); opacity: 0.75; } 50% { transform: scale(1.045); opacity: 1; } }
+  @keyframes dotBreathe { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+
+  @media (max-width: 900px) {
+    .topbar, .foot { padding-left: 24px; padding-right: 24px; }
+    .main { grid-template-columns: 1fr; gap: 18px; padding: 16px 24px 8px; align-items: stretch; }
+    .hero-sub { max-width: 58ch; }
+    .rail { margin: 4px 24px 10px; }
+  }
+  @media (max-width: 640px) {
+    body { font-size: 16px; }
+    .topbar { flex-wrap: wrap; gap: 10px; }
+    .rail { padding: 14px 16px 12px; }
+    .rail-track { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px 22px; }
+    .rung::after { display: none; }
+    .audit { flex-direction: column; gap: 6px; }
+    .console { right: 12px; bottom: 58px; }
+    .btn { padding: 0 22px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+</head>
+<body data-phase="allclear" data-live="0">
+
+  <div class="atmo atmo-warm" aria-hidden="true"></div>
+  <div class="atmo atmo-attend" aria-hidden="true"></div>
+  <div class="atmo atmo-urgent" aria-hidden="true"></div>
+  <div class="atmo atmo-ok" aria-hidden="true"></div>
+
+  <div class="tv">
+
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M8 3.5v17M16 3.5v17M8 8h8M8 12.5h8M8 17h8"/></svg>
+        </div>
+        <span class="brand-name">Care Ladder</span>
+      </div>
+      <span class="top-meta">Resident's home · Fire TV</span>
+      <div class="top-spacer"></div>
+      <span class="learn-pill" id="learnPill" hidden></span>
+      <div class="status-pill ok" id="statusPill" role="status" aria-live="polite">
+        <span class="dot" aria-hidden="true"></span><span id="statusText">Ladder watching</span>
+      </div>
+      <span class="clock" id="clock" aria-label="Current time">14:01</span>
+    </header>
+
+    <main class="main">
+      <section class="hero" id="heroCard" tabindex="0" aria-label="Incident status">
+        <div class="hero-head">
+          <span class="rung-chip ok" id="rungChip">Standby</span>
+          <span class="inc-id" id="incId">no active incident</span>
+        </div>
+        <h1 class="hero-title" id="heroTitle">All clear</h1>
+        <p class="hero-sub" id="heroSub">The resident settled after lunch · living room. The ladder is watching and will confirm before it ever escalates.</p>
+        <div class="actions" id="actions"></div>
+        <div class="push-note" id="pushNote" hidden>
+          <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+          <span id="pushText">Push sent to the primary contact's phone · this TV · 14:03</span>
+        </div>
+      </section>
+
+      <aside class="presence" id="silCard" tabindex="0" aria-label="Room view - privacy silhouette">
+        <div class="pres-stage">
+          <div class="pres-glow tone-sage" id="presGlow" aria-hidden="true"></div>
+          <svg class="pres-art" id="bustArt" viewBox="0 0 140 120" fill="none" stroke="rgba(239,234,226,0.34)" stroke-width="3.2" stroke-linecap="round" aria-hidden="true">
+            <circle cx="70" cy="38" r="17"/>
+            <path d="M30 106 C33 76 49 64 70 64 C91 64 107 76 110 106"/>
+          </svg>
+          <svg class="pres-art" id="lensArt" viewBox="0 0 140 120" fill="none" stroke="rgba(157,176,199,0.55)" stroke-width="3" stroke-linecap="round" aria-hidden="true" hidden>
+            <rect x="46" y="22" width="48" height="48" rx="12"/>
+            <path d="M46 41 C58 33 82 47 94 39" opacity="0.7"/>
+          </svg>
+          <img class="sil-frame" id="silFrame" alt="" hidden>
+        </div>
+        <div class="pres-label" id="silLabel">Silhouette · processed on device</div>
+        <div class="pres-note" id="silNote">Living room · last reading just now</div>
+        <div class="transcript">
+          <div class="t-title">Alexa+ check-in</div>
+          <div id="transcriptBody">
+            <div class="t-empty" id="tEmpty">No check-in running. The last one resolved at 11:02 — the resident answered on the first attempt.</div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <section class="rail" aria-label="Escalation ladder">
+      <div class="rail-head">
+        <span class="rail-title">Escalation ladder</span>
+        <span class="rail-cap" id="railCap">Ladder watching · nothing active</span>
+      </div>
+      <div class="rail-track" id="railTrack"></div>
+      <div class="audit">
+        <span class="audit-label">Audit trail</span>
+        <div class="audit-flow" id="auditEvents"></div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <span>Wellness ladder — not a medical device</span>
+      <span class="sep">·</span>
+      <span>Emergency dial off by default</span>
+      <span class="sep">·</span>
+      <span id="footPlan">Plan: living-room stillness 4m · contacts primary → next</span>
+      <button class="console-toggle" id="consoleToggle" aria-expanded="false" aria-controls="console">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
+        Demo console
+      </button>
+    </footer>
+  </div>
+
+  <!-- Demo console: drives the REAL API (fixtures -> /demo/run, ack -> /incidents/id/ack) -->
+  <div class="console" id="console" role="region" aria-label="Demo console">
+    <div class="console-title">Demo console</div>
+    <div class="console-hint">Drive the ladder end-to-end through the real orchestrator. Arrow keys + Enter move the UI like a Fire TV remote.</div>
+    <button class="console-btn" id="cCue" data-fixture="alexa_path_a"><b>Path A · stillness cue</b><span>no_movement · silence escalates to notify</span></button>
+    <button class="console-btn" id="cAnswer" data-fixture="alexa_path_a_ok"><b>Resident answers OK</b><span>check-in resolves without escalation</span></button>
+    <button class="console-btn" id="cSoftOk" data-fixture="alexa_path_a_soft_ok"><b>Soft OK · no “okay”</b><span>don’t worry · Clear OK · ladder stands down</span></button>
+    <button class="console-btn" id="cNeedsHuman" data-fixture="alexa_path_a_needs_human"><b>Mixed hurt reply</b><span>okay but hurt · Needs human · does not clear</span></button>
+    <button class="console-btn" id="cUnclear" data-fixture="alexa_path_a_unclear"><b>Unclear groan</b><span>nngh · Unclear · re-ask then notify</span></button>
+    <button class="console-btn" id="cOccluded" data-fixture="alexa_path_b"><b>Path B · camera occluded</b><span>blanket over the lens · never claims distress</span></button>
+    <button class="console-btn" id="cReset"><b>Back to all clear</b><span>standby view</span></button>
+  </div>
+
+  <div class="gate-backdrop" id="gateBackdrop">
+    <div class="gate" role="alertdialog" aria-modal="true" aria-labelledby="gateTitle" aria-describedby="gateBody">
+      <div class="gate-title" id="gateTitle">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6z"/></svg>
+        Emergency dial is off
+      </div>
+      <div class="gate-body" id="gateBody">
+        Care Ladder never calls emergency services on its own. This rung stays disabled unless a human turns it on, here, behind this gate — and in this demo build it is hard-locked: holding will explain what a live build would do, but no call can ever be placed.
+      </div>
+      <button class="gate-hold" id="gateHold">
+        <span class="progress" aria-hidden="true"></span>
+        <span class="lbl">Hold 3s to review enabling</span>
+      </button>
+      <button class="gate-cancel" id="gateCancel">Close — keep it off</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="sr-only" aria-live="polite" id="liveRegion"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    phase: 'allclear',
+    inc: null,
+    household: 'amazon-demo-1',
+    seenId: null,
+  };
+
+  const RUNGS = [
+    { id: 'reperceive', name: 'Re-check the room' },
+    { id: 'alexa_checkin', name: 'Alexa+ voice check-in ×2' },
+    { id: 'wait_window', name: '45s listen window' },
+    { id: 'notify_caretaker', name: 'Notify primary contact' },
+    { id: 'request_call', name: 'Request call (simulated)' },
+    { id: 'emergency', name: 'Emergency dial (off)' }
+  ];
+  const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+
+  const EMPTY_NOTE = 'No check-in running. The last one resolved at 11:02 — the resident answered on the first attempt.';
+  const ALLCLEAR_SUB = 'The resident settled after lunch · living room. The ladder is watching and will confirm before it ever escalates.';
+  const LOCKED_MSG = 'Hard-locked in this build — a live install would require re-enabling in care plan settings';
+
+  const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+
+  const fmtClock = () => {
+    const d = new Date();
+    const p = (n) => String(n).padStart(2,'0');
+    return p(d.getHours()) + ':' + p(d.getMinutes());
+  };
+
+  function setAtmosphere(phase, live) {
+    document.body.dataset.phase = phase;
+    document.body.dataset.live = live ? '1' : '0';
+  }
+  function setGlow(tone) {
+    $('presGlow').className = 'pres-glow tone-' + tone;
+  }
+  function setPresenceArt(kind) {
+    $('bustArt').hidden = kind !== 'bust';
+    $('lensArt').hidden = kind !== 'lens';
+    if (kind !== 'frame') $('silFrame').hidden = true;
+  }
+
+  function renderAudit(events) {
+    if (!events || !events.length) {
+      $('auditEvents').innerHTML = '<span class="a-ev" style="color:var(--ink-40)">No events yet</span>';
+      return;
+    }
+    const colors = {
+      cue: 'var(--slate)', reperceive: 'var(--slate)', alexa_checkin: 'var(--amber)',
+      wait_window: 'rgba(239,234,226,0.4)', notify_caretaker: 'var(--clay)', request_call: 'var(--clay)',
+      jump: 'var(--ink-40)', resolve: 'var(--sage)', emergency: 'var(--clay)', suppress: 'var(--ink-40)',
+      ack: 'var(--sage)', caregiver_ack: 'var(--sage)', notify: 'var(--sage)',
+      routine_profile_update: 'var(--ink-40)'
+    };
+    $('auditEvents').innerHTML = events.slice(-6).map((ev, i, arr) => `
+      <span class="a-ev">
+        <span class="a-r" style="color:${colors[ev.tool] || 'var(--ink-40)'}">${esc(ev.tool)}</span>
+        <span class="a-m">${esc(auditMsg(ev))}</span>
+      </span>${i < arr.length - 1 ? '<span class="a-sep">→</span>' : ''}`).join('');
+  }
+  function auditMsg(ev) {
+    const d = ev.detail || {};
+    switch (ev.tool) {
+      case 'cue': return `${ev.cue_kind || ''} cue`;
+      case 'alexa_checkin': return `attempt ${d.attempt || 1} · ${d.intent_label || (d.reply_kind === 'ok' ? 'answered' : 'no speech')}`;
+      case 'wait_window': return `wait closed · ${d.sec || 45}s`;
+      case 'notify_caretaker': return `caretaker notified · ${(d.channels || []).join(' + ')}`;
+      case 'request_call': return `call requested · simulated`;
+      case 'jump': return `skipped · ${d.reason || ''}`;
+      case 'resolve': return `resolved · ${d.reason || ''}`;
+      default: return ev.tool;
+    }
+  }
+
+  function renderTranscript(inc) {
+    const body = $('transcriptBody');
+    const checkins = (inc.events || []).filter(e => e.tool === 'alexa_checkin');
+    if (!checkins.length) {
+      body.innerHTML = '<div class="t-empty" id="tEmpty">No check-in running.</div>';
+      return;
+    }
+    const intentCls = (intent) => intent === 'clear_ok' ? 'ok' : intent === 'needs_human' ? 'human' : 'unclear';
+    const lines = checkins.map(e => {
+      const d = e.detail || {};
+      const prompt = `<div class="t-line"><span class="t-who">Alexa+</span><span class="t-what">"${esc(d.prompt || 'Are you okay?')}"</span></div>`;
+      if (!d.reply_raw) return prompt;
+      const label = d.intent_label || '';
+      const badge = label ? `<span class="t-intent ${intentCls(d.response_intent)}">${esc(label)}</span>` : '';
+      const quiet = d.response_intent === 'unclear';
+      return prompt + `<div class="t-line${quiet ? ' silence' : ''}"><span class="t-who">Resident</span><span class="t-what">"${esc(d.reply_raw)}"</span>${badge}</div>`;
+    }).join('');
+    const resolved = (inc.events || []).some(e => e.tool === 'resolve');
+    const last = checkins[checkins.length - 1];
+    const lastRaw = last && last.detail && last.detail.reply_raw;
+    const silenceLine = (!resolved && !lastRaw) ? '<div class="t-line silence"><span class="t-who">—</span><span class="t-what">silence</span></div>' : '';
+    body.innerHTML = lines + silenceLine;
+  }
+
+  function renderRail(cfg) {
+    $('railCap').textContent = cfg.cap;
+    const states = cfg.states || ['p', 'p', 'p', 'p', 'p', 'off'];
+    $('railTrack').innerHTML = RUNGS.map((r, i) => {
+      const st = states[i];
+      const node = st === 'd' ? CHECK_SVG : '<span>' + (i + 1) + '</span>';
+      const msg = (st === 'a' && cfg.msg) ? '<div class="rung-msg">' + esc(cfg.msg) + '</div>' : '';
+      const cls = st === 'd' ? 'done' : st === 'a' ? 'active' : st === 'off' ? 'off' : 'pending';
+      return '<div class="rung ' + cls + '" style="--i:' + i + '">' +
+        '<div class="rung-node">' + node + '</div>' +
+        '<div class="rung-id">' + r.id + '</div>' +
+        '<div class="rung-name">' + r.name + '</div>' + msg + '</div>';
+    }).join('');
+  }
+
+  function railFromIncident(inc, phase) {
+    if (!inc || phase === 'allclear') {
+      return { states: ['p', 'p', 'p', 'p', 'p', 'off'], msg: null, cap: 'Ladder watching · nothing active' };
+    }
+    const tools = inc.events.map(e => e.tool);
+    const has = (t) => tools.includes(t);
+    if (phase === 'resolved') {
+      const doneThru = has('notify_caretaker') ? 3 : has('wait_window') ? 2 : has('alexa_checkin') ? 1 : 0;
+      const states = ['p', 'p', 'p', 'p', 'p', 'off'].map((s, i) => i <= doneThru ? 'd' : s);
+      return { states, msg: null, cap: 'Ladder stood down · trail kept' };
+    }
+    if (phase === 'occluded') {
+      if (has('notify_caretaker')) {
+        return { states: ['d', 'd', 'p', 'a', 'p', 'off'], msg: 'camera-health inform · not distress', cap: 'Rung 4 of 6 · informing primary' };
+      }
+      return { states: ['d', 'a', 'p', 'p', 'p', 'off'], msg: 'blanket prompt · listening', cap: 'Rung 2 of 6 · voice check-in' };
+    }
+    const seq = ['reperceive', 'alexa_checkin', 'wait_window', 'notify_caretaker', 'request_call'];
+    let last = phase === 'recheck' ? 0 : -1;
+    seq.forEach((t, i) => { if (has(t)) last = i; });
+    if (last < 0) last = 0;
+    const states = seq.map((_, i) => i < last ? 'd' : i === last ? 'a' : 'p');
+    states.push('off');
+    const msgs = [
+      're-checking the camera view',
+      'voice check-in · listening',
+      '45s listen window',
+      'primary contact being informed now',
+      'call requested · simulated'
+    ];
+    return { states, msg: msgs[last] || null, cap: 'Rung ' + (last + 1) + ' of 6 · ' + RUNGS[last].name };
+  }
+
+  function setActions(list) {
+    $('actions').innerHTML = '';
+    (list || []).forEach(a => {
+      const b = document.createElement('button');
+      b.className = a.cls;
+      b.innerHTML = `<span>${a.label}</span>`;
+      if (a.disabled) b.disabled = true;
+      else b.addEventListener('click', a.fn);
+      $('actions').appendChild(b);
+    });
+    $('actions').style.display = (list && list.length) ? 'flex' : 'none';
+  }
+
+  function setPill(kind, text) { $('statusPill').className = 'status-pill ' + kind; $('statusText').textContent = text; }
+  function setChip(kind, text) { $('rungChip').className = 'rung-chip ' + kind; $('rungChip').textContent = text; }
+
+  let toastT;
+  function toast(msg) {
+    $('toast').textContent = msg;
+    $('toast').classList.add('show');
+    clearTimeout(toastT);
+    toastT = setTimeout(() => $('toast').classList.remove('show'), 2600);
+    $('liveRegion').textContent = msg;
+  }
+
+  function incidentPhase(inc) {
+    if (!inc) return 'allclear';
+    const tools = inc.events.map(e => e.tool);
+    if (inc.cue && inc.cue.kind === 'no_visibility' && inc.status !== 'resolved') return 'occluded';
+    if (inc.status === 'resolved') return 'resolved';
+    if (tools.includes('notify_caretaker')) return 'notify';
+    if (tools.includes('alexa_checkin') || tools.includes('wait_window')) return 'checkin';
+    return 'recheck';
+  }
+
+  function renderIncident(inc) {
+    const phase = incidentPhase(inc);
+    state.phase = phase; state.inc = inc;
+    const notify = inc && inc.events.find(e => e.tool === 'notify_caretaker');
+    const resolve = inc && inc.events.find(e => e.tool === 'resolve');
+    const tools = inc ? inc.events.map(e => e.tool) : [];
+
+    if (!inc) {
+      setAtmosphere('allclear', false);
+      setGlow('sage');
+      setPresenceArt('bust');
+      setPill('ok', 'Ladder watching'); setChip('ok', 'Standby');
+      $('incId').textContent = 'no active incident';
+      $('heroTitle').textContent = 'All clear';
+      $('heroSub').textContent = ALLCLEAR_SUB;
+      $('pushNote').hidden = true;
+      $('silLabel').textContent = 'Silhouette · processed on device';
+      $('silNote').textContent = 'Living room · last reading just now';
+      $('transcriptBody').innerHTML = '<div class="t-empty" id="tEmpty">' + EMPTY_NOTE + '</div>';
+      renderAudit([]);
+      renderRail(railFromIncident(null, 'allclear'));
+      setActions([{ label: 'View care plan', cls: 'btn btn-ghost', fn: () => toast('Care plan: living-room stillness 4m · contacts primary → next · emergency off') }]);
+      return;
+    }
+
+    $('incId').textContent = inc.id.slice(0, 8) + ' · ' + fmtClock();
+    renderTranscript(inc);
+    renderAudit(inc.events);
+    renderRail(railFromIncident(inc, phase));
+
+    if (phase === 'occluded') {
+      setAtmosphere('occluded', false);
+      setGlow('slate');
+      setPresenceArt('lens');
+      setPill('info', 'Camera blocked'); setChip('info', 'Rung 1 · Holding');
+      $('heroTitle').textContent = 'Camera is blocked — checking on the resident';
+      const informed = notify ? 'the primary contact is being informed now.' : 'Nothing escalates while the room can\'t be read.';
+      $('heroSub').textContent = 'Coverage reads as privacy, not distress — ' + informed;
+      $('silLabel').textContent = 'No reading · lens covered';
+      $('silNote').textContent = 'Living room · last reading 6 min ago';
+      if (notify) {
+        $('pushNote').hidden = false;
+        $('pushText').textContent = 'Push sent to the primary contact\'s phone · this TV · ' + fmtClock();
+        setActions([{ label: 'Acknowledge', cls: 'btn btn-primary', fn: () => doAck(inc.id) }]);
+      } else {
+        $('pushNote').hidden = true;
+        setActions([]);
+      }
+      return;
+    }
+
+    if (phase === 'resolved') {
+      setAtmosphere('resolved', false);
+      setGlow('sage');
+      setPresenceArt('bust');
+      setPill('ok', 'Resolved'); setChip('ok', 'Resolved · acknowledged');
+      $('heroTitle').textContent = resolve && resolve.detail && resolve.detail.reason === 'alexa_checkin_ok'
+        ? 'The resident has responded' : 'Acknowledged — you took it from here';
+      $('heroSub').textContent = 'The ladder stands down. The incident and its full trail stay in the audit log.';
+      $('pushNote').hidden = true;
+      $('silLabel').textContent = 'Silhouette · processed on device';
+      $('silNote').textContent = 'Living room · all quiet';
+      setActions([{ label: 'Back to all clear', cls: 'btn btn-primary', fn: toAllClear }]);
+      return;
+    }
+
+    if (phase === 'notify') {
+      setAtmosphere('notify', true);
+      setGlow('clay');
+      setPresenceArt('bust');
+      setPill('urgent', 'Calling primary'); setChip('urgent', 'Rung 4 · Notify caretaker');
+      const lastChk = [...(inc.events || [])].reverse().find(e => e.tool === 'alexa_checkin');
+      const lastIntent = lastChk && lastChk.detail && lastChk.detail.response_intent;
+      if (lastIntent === 'needs_human') {
+        $('heroTitle').textContent = 'The resident answered — still needs a human';
+        $('heroSub').textContent = 'Reply is mixed or concerning · the ladder did not clear · the primary contact is being informed.';
+      } else if (lastIntent === 'unclear') {
+        $('heroTitle').textContent = 'The reply was unclear · calling the primary contact';
+        $('heroSub').textContent = 'No clear answer after the voice check-in · the primary contact is being informed now.';
+      } else {
+        $('heroTitle').textContent = 'The resident has not responded · calling the primary contact';
+        $('heroSub').textContent = 'Two voice attempts · 45 seconds of silence · the primary contact is being informed now.';
+      }
+      $('pushNote').hidden = false;
+      $('pushText').textContent = 'Push sent to the primary contact\'s phone · this TV · ' + fmtClock();
+      $('silLabel').textContent = 'Silhouette · processed on device';
+      $('silNote').textContent = 'Living room · last reading just now';
+      setActions([
+        { label: 'Acknowledge', cls: 'btn btn-primary', fn: () => doAck(inc.id) },
+        { label: 'Request call · (555) 010-2276', cls: 'btn btn-ghost', fn: requestCallStub },
+        { label: 'Emergency · off', cls: 'btn btn-danger-off', fn: openGate },
+      ]);
+      const danger = $('actions').querySelector('.btn-danger-off');
+      if (danger) { danger.disabled = false; }
+      trySilhouette(inc.id);
+      return;
+    }
+
+    if (phase === 'checkin') {
+      setAtmosphere('checkin', true);
+      setGlow('amber');
+      setPresenceArt('bust');
+      const waiting = tools.includes('wait_window');
+      setPill('attend', 'Checking in');
+      setChip('attend', waiting ? 'Rung 3 · Listen window' : 'Rung 2 · Voice check-in');
+      $('heroTitle').textContent = 'Alexa+ is checking on the resident';
+      $('heroSub').textContent = waiting
+        ? 'Both attempts quiet · 45 second listen window running.'
+        : 'A gentle voice check-in · two attempts, then a 45 second listen window.';
+      $('pushNote').hidden = true;
+      $('silLabel').textContent = 'Silhouette · processed on device';
+      $('silNote').textContent = 'Living room · listening now';
+      setActions([]);
+      trySilhouette(inc.id);
+      return;
+    }
+
+    setAtmosphere('recheck', true);
+    setGlow('amber');
+    setPresenceArt('bust');
+    setPill('info', 'Re-checking'); setChip('info', 'Rung 1 · Re-perceive');
+    $('heroTitle').textContent = 'The resident has not moved in 4 minutes';
+    $('heroSub').textContent = 'Living room · re-checking the camera view.';
+    $('pushNote').hidden = true;
+    $('silLabel').textContent = 'Silhouette · processed on device';
+    $('silNote').textContent = 'Living room · re-checking now';
+    setActions([]);
+    trySilhouette(inc.id);
+  }
+
+  async function trySilhouette(iid) {
+    const img = $('silFrame');
+    try {
+      const r = await fetch(`/incidents/${iid}/detection_frame`);
+      if (r.ok) {
+        const blob = await r.blob();
+        if (img.dataset.url) URL.revokeObjectURL(img.dataset.url);
+        const url = URL.createObjectURL(blob);
+        img.dataset.url = url;
+        img.src = url;
+        img.hidden = false;
+        $('bustArt').hidden = true;
+        $('lensArt').hidden = true;
+        $('silLabel').textContent = 'Silhouette · processed on device';
+      } else { img.hidden = true; }
+    } catch { img.hidden = true; }
+  }
+
+  function toAllClear() {
+    state.seenId = null;
+    renderIncident(null);
+    toast('Back to all clear');
+  }
+
+  async function doAck(iid) {
+    try {
+      const r = await fetch(`/incidents/${iid}/ack`, { method: 'POST',
+        headers: {'content-type':'application/json'},
+        body: JSON.stringify({ contact: 'primary contact', via: 'fire_tv' }) });
+      if (r.ok) { toast('Incident acknowledged · trail preserved'); await refresh(true); }
+      else toast('Ack failed');
+    } catch (e) { toast('Ack failed: ' + e.message); }
+  }
+
+  function requestCallStub() {
+    toast('Call requested — reserved fictional number, demo only');
+  }
+
+  async function refresh(force) {
+    try {
+      const r = await fetch('/incidents');
+      const list = await r.json();
+      const mine = list.filter(i => i.household_id === state.household);
+      const latest = mine[mine.length - 1] || null;
+      if (!latest) { renderIncident(null); return; }
+      if (force || latest.id !== state.seenId) {
+        state.seenId = latest.id;
+        const full = await (await fetch(`/incidents/${latest.id}`)).json();
+        renderIncident(full);
+      }
+    } catch { /* backend briefly away; keep current view */ }
+  }
+
+  async function refreshLearningBadge() {
+    try {
+      const d = await fetch('/learning/amazon-demo-1').then(r => r.ok ? r.json() : null);
+      const pill = $('learnPill');
+      if (!d) { pill.hidden = true; return; }
+      pill.hidden = false;
+      pill.innerHTML = '<span class="dot"></span>' + (
+        d.frozen ? 'Learning frozen' :
+        d.learning_phase === 'settled' ? 'Schedule settled' : 'Learning schedule');
+      pill.dataset.phase = d.frozen ? 'frozen' : d.learning_phase;
+      pill.title = 'stillness timeout ' + Math.round(d.effective_no_movement_timeout_sec / 60) +
+        'm (plan ' + Math.round(d.plan_timeout_sec / 60) + 'm)';
+    } catch { /* keep hidden */ }
+  }
+  setInterval(() => { $('clock').textContent = fmtClock(); }, 1000);
+  refreshLearningBadge();
+  setInterval(() => { if (!document.hidden) refreshLearningBadge(); }, 20000);
+  setInterval(() => { if (!document.hidden) refresh(); }, 3000);
+  renderIncident(null);
+  refresh();
+
+  let holdT1, holdT2;
+  function openGate() { $('gateBackdrop').classList.add('open'); $('gateCancel').focus(); }
+  function closeGate() { $('gateBackdrop').classList.remove('open'); cancelHold(); }
+  function cancelHold() {
+    clearInterval(holdT1); clearTimeout(holdT2);
+    $('gateHold').querySelector('.progress').style.width = '0%';
+    $('gateHold').querySelector('.lbl').textContent = 'Hold 3s to review enabling';
+  }
+  $('gateHold').addEventListener('pointerdown', () => {
+    const prog = $('gateHold').querySelector('.progress');
+    const lbl = $('gateHold').querySelector('.lbl');
+    const t0 = Date.now();
+    holdT1 = setInterval(() => {
+      const pct = Math.min(100, (Date.now() - t0) / 30);
+      prog.style.width = pct + '%';
+    }, 50);
+    holdT2 = setTimeout(() => {
+      cancelHold();
+      lbl.textContent = LOCKED_MSG;
+      toast('Emergency dial stays off — no call can be placed from this build');
+    }, 3000);
+  });
+  ['pointerup', 'pointerleave'].forEach(ev => $('gateHold').addEventListener(ev, cancelHold));
+  $('gateCancel').addEventListener('click', closeGate);
+  $('gateBackdrop').addEventListener('click', (e) => { if (e.target === $('gateBackdrop')) closeGate(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('gateBackdrop').classList.contains('open')) closeGate();
+  });
+
+  const focusables = () => Array.from(document.querySelectorAll('.btn:not([disabled]), .console-btn:not([disabled]), .console-toggle, .hero[tabindex], .presence[tabindex], .gate-hold, .gate-cancel'))
+    .filter(el => el.offsetParent !== null && !el.closest('.gate-backdrop:not(.open)'));
+  function spatialMove(dx, dy) {
+    const items = focusables();
+    if (!items.length) return;
+    const cur = document.activeElement;
+    const curIdx = items.indexOf(cur);
+    if (curIdx === -1) { items[0].focus(); syncFocusClass(); return; }
+    const r = cur.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let best = null, bestD = Infinity;
+    items.forEach(el => {
+      if (el === cur) return;
+      const b = el.getBoundingClientRect();
+      const bx = b.left + b.width / 2, by = b.top + b.height / 2;
+      const vdx = bx - cx, vdy = by - cy;
+      if (dx && Math.sign(vdx) !== dx) return;
+      if (dy && Math.sign(vdy) !== dy) return;
+      if (!dx && !dy) return;
+      const dist = (dx ? (vdx * vdx) : 0) + (dy ? (vdy * vdy) : 0) + (dx ? vdy * vdy * 0.4 : vdx * vdx * 0.4);
+      if (dist < bestD) { bestD = dist; best = el; }
+    });
+    if (best) { best.focus(); syncFocusClass(); }
+  }
+  function syncFocusClass() {
+    document.querySelectorAll('.focused').forEach(b => b.classList.remove('focused'));
+    const a = document.activeElement;
+    if (a && a.classList && (a.classList.contains('btn') || a.classList.contains('console-btn') || a.classList.contains('console-toggle') || a.classList.contains('gate-hold') || a.classList.contains('gate-cancel'))) {
+      a.classList.add('focused');
+    }
+  }
+  document.addEventListener('keydown', (e) => {
+    const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (map[e.key]) { e.preventDefault(); spatialMove(...map[e.key]); }
+  });
+  document.addEventListener('focusin', syncFocusClass);
+
+  $('consoleToggle').addEventListener('click', () => {
+    const open = $('console').classList.toggle('open');
+    $('consoleToggle').setAttribute('aria-expanded', open);
+  });
+  document.querySelectorAll('.console-btn[data-fixture]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      try {
+        const r = await fetch('/demo/run', { method: 'POST',
+          headers: {'content-type':'application/json'},
+          body: JSON.stringify({ fixture: btn.dataset.fixture }) });
+        if (r.ok) { toast('Cue fired · ladder running'); await refresh(true); }
+        else toast('Fixture failed: ' + (await r.json()).detail);
+      } catch (e) { toast('Fixture failed: ' + e.message); }
+    });
+  });
+  $('cReset').addEventListener('click', toAllClear);
+})();
+</script>
+</body>
+</html>

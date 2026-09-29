@@ -1,0 +1,68 @@
+{
+  "family": "care-ladder-demo",
+  "requiresCompatibilities": [
+    "FARGATE"
+  ],
+  "networkMode": "awsvpc",
+  "cpu": "512",
+  "memory": "1024",
+  "runtimePlatform": {
+    "cpuArchitecture": "X86_64",
+    "operatingSystemFamily": "LINUX"
+  },
+  "containerDefinitions": [
+    {
+      "name": "care-ladder-api",
+      "image": "367597235216.dkr.ecr.us-east-1.amazonaws.com/care-ladder:demo",
+      "essential": true,
+      "portMappings": [
+        {
+          "containerPort": 8000,
+          "protocol": "tcp"
+        }
+      ],
+      "environment": [
+        {
+          "name": "CARE_LADDER_ENV",
+          "value": "demo"
+        },
+        {
+          "name": "AWS_REGION",
+          "value": "us-east-1"
+        },
+        {
+          "name": "CARE_LADDER_STORE",
+          "value": "dynamodb"
+        },
+        {
+          "name": "CLIP_BUCKET",
+          "value": "care-ladder-demo-367597235216"
+        },
+        {
+          "name": "EVENT_BUS_NAME",
+          "value": "care-ladder"
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/care-ladder-demo",
+          "awslogs-region": "us-east-1",
+          "awslogs-stream-prefix": "api"
+        }
+      },
+      "healthCheck": {
+        "command": [
+          "CMD-SHELL",
+          "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/incidents')\" || exit 1"
+        ],
+        "interval": 30,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 20
+      }
+    }
+  ],
+  "executionRoleArn": "arn:aws:iam::367597235216:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::367597235216:role/ecsTaskExecutionRole"
+}

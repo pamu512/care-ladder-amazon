@@ -1,0 +1,14 @@
+.venv/
+.git/
+.pytest_cache/
+**/__pycache__/
+*.pyc
+*.egg-info/
+.superpowers/
+grant/
+docs/
+tests/
+!tests/fixtures/
+*.md
+!README.md
+infra/

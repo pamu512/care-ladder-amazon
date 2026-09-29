@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Care Ladder · Fire TV Caregiver Dashboard</title>
+<style>
+  :root {
+    --bg: #24221E;
+    --bg-deep: #1E1C18;
+    --surface: #2E2B25;
+    --surface-2: #35322A;
+    --ink: #EFEAE2;
+    --ink-60: rgba(239,234,226,0.62);
+    --ink-40: rgba(239,234,226,0.40);
+    --ink-25: rgba(239,234,226,0.25);
+    --line: rgba(239,234,226,0.09);
+    --sage: #A8B5A0;
+    --sage-dim: rgba(168,181,160,0.16);
+    --amber: #D9A05B;
+    --amber-dim: rgba(217,160,91,0.16);
+    --clay: #D98873;
+    --clay-dim: rgba(217,136,115,0.18);
+    --slate: #9DB0C7;
+    --slate-dim: rgba(157,176,199,0.14);
+    --radius: 14px;
+    --radius-sm: 10px;
+    --font-sans: "Instrument Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    --focus: 0 0 0 3px #D9A05B, 0 0 0 6px rgba(217,160,91,0.25);
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    background: var(--bg-deep);
+    font-family: var(--font-sans);
+    color: var(--ink);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  .tv {
+    width: min(100%, 1280px);
+    margin: 0 auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    background:
+      radial-gradient(1200px 500px at 20% -10%, rgba(217,160,91,0.05), transparent 60%),
+      radial-gradient(900px 420px at 95% 110%, rgba(168,181,160,0.05), transparent 55%),
+      var(--bg);
+  }
+
+  /* ── Top bar ── */
+  .topbar {
+    display: flex; align-items: center; gap: 18px;
+    padding: clamp(14px, 2.2vw, 22px) clamp(20px, 3.5vw, 44px);
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark {
+    width: 26px; height: 26px; border-radius: 8px;
+    background: linear-gradient(150deg, #d9a05b, #a8b5a0);
+    display: grid; place-items: center;
+  }
+  .brand-mark svg { width: 15px; height: 15px; stroke: #24221e; }
+  .brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+  .top-meta { font-size: 12px; color: var(--ink-40); }
+  .top-spacer { flex: 1; }
+  .status-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 7px 16px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid var(--line);
+    transition: background .3s, color .3s, border-color .3s;
+  }
+  .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .status-pill.ok { background: var(--sage-dim); color: var(--sage); border-color: transparent; }
+  .status-pill.attend { background: var(--amber-dim); color: var(--amber); border-color: transparent; }
+  .status-pill.urgent { background: var(--clay-dim); color: var(--clay); border-color: transparent; }
+  .status-pill.info { background: var(--slate-dim); color: var(--slate); border-color: transparent; }
+  .clock { font-family: var(--font-mono); font-size: 12px; color: var(--ink-40); font-variant-numeric: tabular-nums; }
+
+  /* ── Main grid ── */
+  .main {
+    flex: 1;
+    display: grid;
+    grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+    gap: clamp(14px, 2vw, 24px);
+    padding: clamp(16px, 2.6vw, 30px) clamp(20px, 3.5vw, 44px);
+    align-content: start;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: clamp(16px, 2vw, 24px);
+  }
+  .card:focus { outline: none; }
+
+  /* ── Hero (incident) ── */
+  .hero { display: flex; flex-direction: column; gap: clamp(12px, 1.6vw, 18px); }
+  .hero-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .rung-chip {
+    padding: 6px 14px; border-radius: 999px;
+    font-size: 13px; font-weight: 600;
+  }
+  .rung-chip.ok { background: var(--sage-dim); color: var(--sage); }
+  .rung-chip.attend { background: var(--amber-dim); color: var(--amber); }
+  .rung-chip.urgent { background: var(--clay-dim); color: var(--clay); }
+  .rung-chip.info { background: var(--slate-dim); color: var(--slate); }
+  .inc-id { font-family: var(--font-mono); font-size: 11.5px; color: var(--ink-40); font-variant-numeric: tabular-nums; }
+
+  .hero-title {
+    font-size: clamp(26px, 3.4vw, 40px);
+    font-weight: 700; letter-spacing: -0.02em; line-height: 1.12;
+  }
+  .hero-sub { font-size: clamp(14px, 1.6vw, 18px); color: var(--ink-60); line-height: 1.55; max-width: 34ch; }
+
+  .wait-bar { display: flex; align-items: center; gap: 8px; }
+  .wait-cell { flex: 1; height: 34px; border-radius: 8px; background: var(--ink-25); overflow: hidden; position: relative; }
+  .wait-cell.fill { background: rgba(217,160,91,0.28); }
+  .wait-cell.fill::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(217,160,91,0.55);
+    transform-origin: left; animation: drain 1s linear;
+  }
+  @keyframes drain { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+  .wait-num { font-family: var(--font-mono); font-size: 15px; color: var(--amber); min-width: 52px; text-align: right; font-variant-numeric: tabular-nums; }
+
+  .actions { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    min-height: 52px; padding: 12px 30px;
+    border-radius: 12px; border: none;
+    font-family: inherit; font-size: 15.5px; font-weight: 600;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 10px;
+    transition: transform .12s ease, background .2s, border-color .2s;
+  }
+  .btn svg { width: 18px; height: 18px; }
+  .btn:active { transform: translateY(2px); }
+  .btn-primary { background: var(--amber); color: #24221e; }
+  .btn-primary:hover { background: #e3ad6c; }
+  .btn-secondary { background: transparent; color: var(--ink); border: 1.5px solid var(--ink-25); }
+  .btn-secondary:hover { border-color: var(--ink-40); background: rgba(239,234,226,0.04); }
+  .btn-danger-off {
+    background: transparent; color: var(--ink-40);
+    border: 1.5px dashed var(--ink-25); cursor: not-allowed;
+  }
+  .btn:focus-visible, .card:focus-visible, .console-btn:focus-visible, .gate-hold:focus-visible {
+    outline: none; box-shadow: var(--focus);
+  }
+  .btn.focused { box-shadow: var(--focus); }
+
+  .push-note {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 13px; color: var(--ink-60);
+    padding: 10px 14px; border-radius: var(--radius-sm);
+    background: rgba(239,234,226,0.04); border: 1px solid var(--line);
+  }
+  .push-note svg { width: 16px; height: 16px; stroke: var(--slate); flex-shrink: 0; }
+
+  /* ── Right column ── */
+  .side { display: flex; flex-direction: column; gap: clamp(14px, 2vw, 24px); }
+
+  .silhouette {
+    background: linear-gradient(165deg, var(--surface-2), #292620);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 12px; min-height: 200px; text-align: center;
+  }
+  .sil-figure {
+    width: 74px; height: 74px; border-radius: 50% 50% 18px 18px;
+    background: rgba(239,234,226,0.14);
+  }
+  .sil-figure.occluded { border-radius: 12px; background: var(--slate-dim); }
+  .sil-label { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-40); }
+  .sil-note { font-size: 12.5px; color: var(--ink-60); max-width: 30ch; line-height: 1.5; }
+
+  .transcript { display: flex; flex-direction: column; gap: 10px; }
+  .transcript-title { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-40); }
+  .t-line { display: flex; flex-direction: column; gap: 2px; padding: 10px 14px; border-radius: var(--radius-sm); background: rgba(239,234,226,0.035); }
+  .t-who { font-size: 11px; color: var(--ink-40); }
+  .t-what { font-size: 14px; color: var(--ink); line-height: 1.45; }
+  .t-line.silence .t-what { color: var(--ink-60); font-style: italic; }
+  .t-empty { font-size: 13px; color: var(--ink-40); font-style: italic; padding: 6px 2px; }
+
+  /* ── Audit trail ── */
+  .audit {
+    grid-column: 1 / -1;
+    display: flex; align-items: center; gap: 22px;
+    padding: 14px clamp(16px, 2vw, 22px);
+    background: var(--bg-deep);
+    border: 1px solid var(--line); border-radius: var(--radius-sm);
+    overflow-x: auto;
+  }
+  .audit-label { font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-40); white-space: nowrap; }
+  .audit-events { display: flex; gap: 26px; flex: 1; }
+  .a-ev { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+  .a-t { font-family: var(--font-mono); font-size: 11px; color: var(--ink-40); font-variant-numeric: tabular-nums; }
+  .a-r { font-family: var(--font-mono); font-size: 10.5px; }
+  .a-m { font-size: 12.5px; color: var(--ink-60); }
+
+  /* ── Footer ── */
+  .foot {
+    display: flex; align-items: center; gap: 18px;
+    padding: 12px clamp(20px, 3.5vw, 44px) 16px;
+    border-top: 1px solid var(--line);
+    font-size: 11.5px; color: var(--ink-40);
+  }
+  .foot .sep { color: var(--ink-25); }
+  .console-toggle {
+    margin-left: auto; min-height: 44px; padding: 8px 18px;
+    background: transparent; border: 1px solid var(--line); border-radius: 999px;
+    color: var(--ink-60); font-family: inherit; font-size: 12.5px; cursor: pointer;
+    display: inline-flex; align-items: center; gap: 8px;
+  }
+  .console-toggle:hover { border-color: var(--ink-25); color: var(--ink); }
+  .console-toggle svg { width: 14px; height: 14px; }
+
+  /* ── Demo console ── */
+  .console {
+    position: fixed; right: 18px; bottom: 64px; z-index: 50;
+    width: 300px; max-width: calc(100vw - 36px);
+    background: rgba(30,28,24,0.97); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 16px;
+    box-shadow: 0 18px 50px rgba(0,0,0,0.5);
+    display: none; flex-direction: column; gap: 10px;
+  }
+  .console.open { display: flex; }
+  .console-title { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--amber); }
+  .console-hint { font-size: 11.5px; color: var(--ink-40); line-height: 1.5; }
+  .console-btn {
+    min-height: 44px; padding: 10px 14px; text-align: left;
+    background: rgba(239,234,226,0.045); border: 1px solid var(--line); border-radius: var(--radius-sm);
+    color: var(--ink); font-family: inherit; font-size: 12.5px; cursor: pointer;
+    transition: border-color .15s;
+  }
+  .console-btn:hover { border-color: var(--amber); }
+  .console-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .console-btn b { font-weight: 600; }
+  .console-btn span { color: var(--ink-40); display: block; margin-top: 2px; font-size: 11px; }
+
+  /* ── Emergency gate modal ── */
+  .gate-backdrop {
+    position: fixed; inset: 0; z-index: 90;
+    background: rgba(20,18,15,0.78); backdrop-filter: blur(3px);
+    display: none; align-items: center; justify-content: center;
+  }
+  .gate-backdrop.open { display: flex; }
+  .gate {
+    width: min(560px, calc(100vw - 40px));
+    background: var(--surface); border: 1px solid rgba(217,136,115,0.35);
+    border-radius: var(--radius); padding: 28px;
+    display: flex; flex-direction: column; gap: 16px;
+  }
+  .gate-title { font-size: 21px; font-weight: 700; color: var(--clay); }
+  .gate-body { font-size: 14.5px; color: var(--ink-60); line-height: 1.6; }
+  .gate-hold {
+    min-height: 56px; border-radius: 12px;
+    border: 1.5px dashed rgba(217,136,115,0.55);
+    background: transparent; color: var(--clay);
+    font-family: inherit; font-size: 14.5px; font-weight: 600; cursor: pointer;
+    position: relative; overflow: hidden;
+  }
+  .gate-hold .progress {
+    position: absolute; inset: 0; width: 0%;
+    background: rgba(217,136,115,0.22); pointer-events: none;
+  }
+  .gate-hold .lbl { position: relative; }
+  .gate-cancel { align-self: flex-end; background: none; border: none; color: var(--ink-40); font-family: inherit; font-size: 13px; cursor: pointer; min-height: 44px; padding: 8px 12px; }
+  .gate-cancel:hover { color: var(--ink); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 70px; left: 50%; transform: translateX(-50%) translateY(8px);
+    background: #14120f; color: var(--ink); border: 1px solid var(--line);
+    padding: 12px 22px; border-radius: 999px; font-size: 13.5px;
+    opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s; z-index: 80;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* ── Responsive ── */
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+    .audit { flex-wrap: wrap; }
+    .console { bottom: 60px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; }
+  }
+</style>
+<!--
+  Discovery (audit trail):
+    deliverable: Interactive Fire TV caregiver dashboard prototype (App-class, 2-of-2)
+    input contract: arrow keys / Enter approximate the Fire TV D-pad; Tab works too; demo console drives the rung machine
+    states covered: all-clear (default) · loading (rung-1 recheck) · check-in with live countdown · wait · notify · resolved · camera-occluded (error+recovery) · emergency gate (off, hold-to-confirm)
+    privacy: silhouette only, no video element anywhere; fictional reserved number (555) 010-2276
+-->
+</head>
+<body>
+<div class="tv">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18h4M13 18h4M8 18l2-9 2 9"/></svg>
+      </div>
+      <span class="brand-name">Care Ladder</span>
+    </div>
+    <span class="top-meta">Meera's home · Fire TV</span>
+    <div class="top-spacer"></div>
+    <div class="status-pill ok" id="statusPill" role="status" aria-live="polite">
+      <span class="dot"></span><span id="statusText">Ladder watching</span>
+    </div>
+    <span class="clock" id="clock" aria-hidden="true">14:01</span>
+  </header>
+
+  <main class="main">
+
+    <!-- Hero incident card -->
+    <section class="card hero" id="heroCard" tabindex="0" aria-label="Incident status">
+      <div class="hero-head">
+        <span class="rung-chip ok" id="rungChip">Standby</span>
+        <span class="inc-id" id="incId">no active incident</span>
+      </div>
+      <h1 class="hero-title" id="heroTitle">All clear</h1>
+      <p class="hero-sub" id="heroSub">Meera settled after lunch · living room. The ladder is watching and will confirm before it ever escalates.</p>
+
+      <div class="wait-bar" id="waitBar" hidden>
+        <div class="wait-cell" aria-hidden="true"></div>
+        <div class="wait-cell" aria-hidden="true"></div>
+        <div class="wait-cell" aria-hidden="true"></div>
+        <div class="wait-cell" aria-hidden="true"></div>
+        <div class="wait-cell" aria-hidden="true"></div>
+        <span class="wait-num" id="waitNum">45s</span>
+      </div>
+
+      <div class="actions" id="actions"></div>
+
+      <div class="push-note" id="pushNote" hidden>
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span id="pushText">Push sent to Anoop's phone · this TV · 14:03</span>
+      </div>
+
+      <!-- privacy badges removed per user review: the silhouette carries the guarantee;
+           rationale kept in the design canvas for judges -->
+    </section>
+
+    <!-- Right column -->
+    <div class="side">
+
+      <section class="card silhouette" id="silCard" tabindex="0" aria-label="Room view — privacy silhouette">
+        <div class="sil-figure" id="silFigure"></div>
+        <div class="sil-label" id="silLabel">Silhouette · processed on device</div>
+        <div class="sil-note" id="silNote">Living room · last reading just now</div>
+      </section>
+
+      <section class="card transcript" aria-label="Voice check-in transcript">
+        <div class="transcript-title">Alexa+ check-in</div>
+        <div id="transcriptBody">
+          <div class="t-empty" id="tEmpty">No check-in running. The last one resolved at 11:02 — Meera answered on the first attempt.</div>
+        </div>
+      </section>
+    </div>
+
+    <!-- Audit trail -->
+    <section class="audit" aria-label="Audit trail">
+      <span class="audit-label">Audit trail</span>
+      <div class="audit-events" id="auditEvents"></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span>Wellness ladder — not a medical device</span>
+    <span class="sep">·</span>
+    <span>Emergency dial off by default</span>
+    <span class="sep">·</span>
+    <span id="footPlan">Plan: living-room stillness 4m · contacts Anoop → Priya</span>
+    <button class="console-toggle" id="consoleToggle" aria-expanded="false" aria-controls="console">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7"/></svg>
+      Demo console
+    </button>
+  </footer>
+</div>
+
+<!-- Demo console -->
+<div class="console" id="console" role="region" aria-label="Demo console">
+  <div class="console-title">Demo console</div>
+  <div class="console-hint">Drive the ladder end-to-end. Arrow keys + Enter move the UI like a Fire TV remote.</div>
+  <button class="console-btn" id="cCue"><b>Simulate cue</b><span>no_movement · living room · 4m 12s</span></button>
+  <button class="console-btn" id="cAnswer"><b>Meera answers OK</b><span>resolves the check-in</span></button>
+  <button class="console-btn" id="cExpire"><b>Let silence win</b><span>fast-forward the wait window</span></button>
+  <button class="console-btn" id="cOccluded"><b>Camera occluded</b><span>blanket over the lens</span></button>
+  <button class="console-btn" id="cAuto"><b>Run full demo</b><span>auto: cue → check-in → escalate → ack</span></button>
+  <button class="console-btn" id="cReset"><b>Reset</b><span>back to all clear</span></button>
+</div>
+
+<!-- Emergency gate -->
+<div class="gate-backdrop" id="gateBackdrop">
+  <div class="gate" role="alertdialog" aria-modal="true" aria-labelledby="gateTitle" aria-describedby="gateBody">
+    <div class="gate-title" id="gateTitle">Emergency dial is off</div>
+    <div class="gate-body" id="gateBody">
+      Care Ladder never calls emergency services on its own. This rung stays disabled unless a human turns it on, here, behind this gate — and in this demo build it is hard-locked: holding will explain what a live build would do, but no call can ever be placed.
+    </div>
+    <button class="gate-hold" id="gateHold">
+      <span class="progress" aria-hidden="true"></span>
+      <span class="lbl">Hold 3s to review enabling</span>
+    </button>
+    <button class="gate-cancel" id="gateCancel">Close — keep it off</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="sr-only" aria-live="polite" id="liveRegion"></div>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const state = {
+    phase: 'allclear',            // allclear | recheck | checkin | wait | notify | resolved | occluded
+    attempt: 0,
+    waitLeft: 45,
+    waitTimer: null,
+    tickTimer: null,
+    inc: null,
+    demoTimers: [],
+  };
+
+  const CUE_TIME = new Date('2026-09-26T14:01:52');
+  const fmtT = (d) => {
+    const p = (n) => String(n).padStart(2, '0');
+    return p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds());
+  };
+  const nowFake = () => new Date(CUE_TIME.getTime() + (Date.now() - state.boot));
+  state.boot = Date.now();
+
+  // ── audit trail ──
+  const auditEvents = [];
+  function audit(rung, msg, color) {
+    const t = fmtT(nowFake());
+    auditEvents.unshift({ t, rung, msg, color });
+    renderAudit();
+  }
+  function renderAudit() {
+    $('auditEvents').innerHTML = auditEvents.slice(0, 5).map(ev => `
+      <div class="a-ev">
+        <span class="a-t">${ev.t}</span>
+        <span class="a-r" style="color:${ev.color}">${ev.rung}</span>
+        <span class="a-m">${ev.msg}</span>
+      </div>`).join('');
+  }
+
+  // ── transcript ──
+  function tLine(who, what, silence) {
+    const div = document.createElement('div');
+    div.className = 't-line' + (silence ? ' silence' : '');
+    div.innerHTML = `<span class="t-who">${who}</span><span class="t-what">${what}</span>`;
+    $('tEmpty') && $('tEmpty').remove();
+    $('transcriptBody').appendChild(div);
+  }
+  function clearTranscript(note) {
+    $('transcriptBody').innerHTML = `<div class="t-empty" id="tEmpty">${note}</div>`;
+  }
+
+  // ── toast / live region ──
+  let toastT;
+  function toast(msg) {
+    $('toast').textContent = msg;
+    $('toast').classList.add('show');
+    clearTimeout(toastT);
+    toastT = setTimeout(() => $('toast').classList.remove('show'), 2600);
+    $('liveRegion').textContent = msg;
+  }
+
+  // ── buttons ──
+  const svgPhone = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.13.96.36 1.9.7 2.8a2 2 0 0 1-.45 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.45c.9.34 1.84.57 2.8.7A2 2 0 0 1 22 16.9z"/></svg>';
+  function setActions(list) {
+    $('actions').innerHTML = '';
+    list.forEach(a => {
+      const b = document.createElement('button');
+      b.className = a.cls;
+      b.innerHTML = (a.icon ? svgPhone : '') + `<span>${a.label}</span>`;
+      if (a.disabled) b.disabled = true;
+      else b.addEventListener('click', a.fn);
+      $('actions').appendChild(b);
+    });
+  }
+
+  function setPill(kind, text) {
+    $('statusPill').className = 'status-pill ' + kind;
+    $('statusText').textContent = text;
+  }
+  function setChip(kind, text) { $('rungChip').className = 'rung-chip ' + kind; $('rungChip').textContent = text; }
+
+  // ── clock ──
+  setInterval(() => { $('clock').textContent = fmtT(nowFake()).slice(0, 5); }, 1000);
+
+  // ══════════ STATE MACHINE ══════════
+
+  function toAllClear(silent) {
+    stopTimers();
+    state.phase = 'allclear'; state.inc = null; state.attempt = 0;
+    setPill('ok', 'Care plan active');
+    setChip('ok', 'Standby');
+    $('incId').textContent = 'no active incident';
+    $('heroTitle').textContent = 'All clear';
+    $('heroSub').textContent = 'Meera settled after lunch · living room.';
+    $('waitBar').hidden = true;
+    $('pushNote').hidden = true;
+    $('silFigure').className = 'sil-figure';
+    $('silLabel').textContent = 'Silhouette · processed on device';
+    $('silNote').textContent = 'Living room · last reading just now';
+    clearTranscript('No check-in running. The last one resolved at 11:02 — Meera answered on the first attempt.');
+    setActions([
+      { label: 'View care plan', cls: 'btn btn-secondary', fn: () => toast('Care plan: living-room stillness 4m · contacts Anoop → Priya → neighbor · emergency off') },
+    ]);
+    if (!silent) toast('Back to all clear');
+  }
+
+  function toRecheck() {
+    stopTimers();
+    state.phase = 'recheck';
+    state.inc = 'INC-00' + (40 + Math.floor(Math.random() * 50));
+    setPill('info', 'Re-checking');
+    setChip('info', 'Rung 1 · Re-perceive');
+    $('incId').textContent = state.inc + ' · ' + fmtT(nowFake()).slice(0, 5);
+    $('heroTitle').textContent = 'Meera has not moved in 4 minutes';
+    $('heroSub').textContent = 'Living room · re-checking the camera view.';
+    $('waitBar').hidden = true;
+    $('pushNote').hidden = true;
+    setActions([]);
+    audit('rung 1', 'no_movement · living room · re-checking', 'var(--slate)');
+    setTimeout(() => { if (state.phase === 'recheck') toCheckin(); }, 2600);
+  }
+
+  function toCheckin() {
+    state.phase = 'checkin';
+    state.attempt = 1;
+    state.waitLeft = 45;
+    setPill('attend', 'Checking on Meera');
+    setChip('attend', 'Rung 2 · Voice check-in');
+    $('heroTitle').textContent = 'Alexa is checking on Meera';
+    $('heroSub').textContent = 'Two voice attempts · then a 45-second wait · then it calls for you.';
+    $('waitBar').hidden = false;
+    renderWait();
+    clearTranscript('');
+    $('tEmpty').remove();
+    tLine('Alexa+', '“Meera, are you okay?”');
+    audit('rung 2', 'Alexa+ check-in started · attempt 1', 'var(--amber)');
+    setActions([
+      { label: 'Listen in', cls: 'btn btn-secondary', disabled: true },  // privacy: audio never leaves the room
+      { label: 'Notify now', cls: 'btn btn-secondary', fn: () => { state.waitLeft = Math.min(state.waitLeft, 2); toast('Skipping the wait window'); } },
+    ]);
+    state.waitTimer = setInterval(() => {
+      state.waitLeft--;
+      renderWait();
+      if (state.waitLeft === 22 && state.attempt === 1) {
+        state.attempt = 2;
+        tLine('Alexa+', '“Meera, it’s Anoop’s Care Ladder — can you hear me?”');
+        audit('rung 2', 'attempt 2 · no speech detected', 'var(--amber)');
+      }
+      if (state.waitLeft <= 0) toWaitDone();
+    }, 1000);
+  }
+
+  function renderWait() {
+    const cells = $('waitBar').querySelectorAll('.wait-cell');
+    const per = 45 / cells.length;
+    cells.forEach((c, i) => {
+      const remain = state.waitLeft - i * per;
+      c.className = 'wait-cell' + (remain > 0 ? ' fill' : '');
+    });
+    $('waitNum').textContent = state.waitLeft + 's';
+  }
+
+  function toWaitDone() {
+    stopTimers();
+    state.phase = 'wait';
+    setChip('attend', 'Rung 3 · Wait closed');
+    $('waitBar').hidden = true;
+    audit('rung 3', 'wait window closed · 45s silence', 'rgba(239,234,226,0.4)');
+    tLine('—', 'silence · 45s', true);
+    setTimeout(() => { if (state.phase === 'wait') toNotify(); }, 900);
+  }
+
+  function toNotify() {
+    state.phase = 'notify';
+    setPill('urgent', 'Calling Anoop');
+    setChip('urgent', 'Rung 4 · Notify caretaker');
+    $('heroTitle').textContent = 'Meera has not responded · calling Anoop';
+    $('heroSub').textContent = 'Two voice attempts · 45 seconds of silence · Anoop is being informed now.';
+    $('pushNote').hidden = false;
+    $('pushText').textContent = 'Push sent to Anoop’s phone · this TV · ' + fmtT(nowFake()).slice(0, 5);
+    audit('rung 4', 'caretaker notified · push + TV', 'var(--clay)');
+    setActions([
+      { label: 'Acknowledge', cls: 'btn btn-primary', icon: false, fn: ack },
+      { label: 'Request call · (555) 010-2276', cls: 'btn btn-secondary', icon: true, fn: () => { audit('rung 4', 'call requested · (555) 010-2276 · fictional', 'var(--clay)'); toast('Call requested — reserved fictional number, demo only'); } },
+      { label: 'Emergency · off', cls: 'btn btn-danger-off', disabled: true, fn: null },
+    ]);
+    // wire the dashed emergency button to the gate despite disabled look
+    const danger = $('actions').querySelector('.btn-danger-off');
+    danger.disabled = false;
+    danger.addEventListener('click', openGate);
+  }
+
+  function ack() {
+    stopTimers();
+    state.phase = 'resolved';
+    setPill('ok', 'Resolved');
+    setChip('ok', 'Resolved · acknowledged');
+    $('heroTitle').textContent = 'Acknowledged — you took it from here';
+    $('heroSub').textContent = 'The ladder stands down. The incident and its full trail stay in the audit log.';
+    $('pushNote').hidden = true;
+    $('waitBar').hidden = true;
+    audit('rung 4', 'acknowledged by Anoop · ladder standing down', 'var(--sage)');
+    tLine('Caretaker', 'Acknowledged on Fire TV');
+    setActions([
+      { label: 'Back to all clear', cls: 'btn btn-primary', fn: () => toAllClear() },
+    ]);
+    toast('Incident acknowledged · trail preserved');
+  }
+
+  function resolveByAnswer() {
+    stopTimers();
+    state.phase = 'resolved';
+    setPill('ok', 'Resolved');
+    setChip('ok', 'Resolved · voice');
+    $('heroTitle').textContent = 'Meera has responded';
+    $('heroSub').textContent = '“I’m okay — just resting.” The ladder stands down after a spoken answer.';
+    $('waitBar').hidden = true;
+    $('pushNote').hidden = true;
+    tLine('Meera', '“I’m okay — just resting.”');
+    audit('rung 2', 'resolved · Meera answered · attempt ' + Math.max(1, state.attempt), 'var(--sage)');
+    setActions([
+      { label: 'Back to all clear', cls: 'btn btn-primary', fn: () => toAllClear() },
+    ]);
+    toast('Resolved by voice answer · trail preserved');
+  }
+
+  function toOccluded() {
+    stopTimers();
+    state.phase = 'occluded';
+    setPill('info', 'Camera blocked');
+    setChip('info', 'Rung 1 · Holding');
+    $('incId').textContent = 'camera health · ' + fmtT(nowFake()).slice(0, 5);
+    $('heroTitle').textContent = 'Camera is blocked — checking on Meera';
+    $('heroSub').textContent = 'Coverage reads as privacy, not distress — nothing escalates while the room can’t be read.';
+    $('waitBar').hidden = true;
+    $('pushNote').hidden = true;
+    $('silFigure').className = 'sil-figure occluded';
+    $('silLabel').textContent = 'No reading · lens covered';
+    $('silNote').textContent = 'Living room · last reading 6 min ago';
+    clearTranscript('');
+    audit('rung 1', 'no_visibility · lens covered · holding', 'var(--slate)');
+    setActions([]);
+    // stage 2: voice check despite occlusion — ask Meera to move the blanket
+    setTimeout(() => {
+      if (state.phase !== 'occluded') return;
+      tLine('Alexa+', '“Meera, the camera is covered — could you move the blanket?”');
+      audit('rung 2', 'asked Meera to move the blanket', 'var(--amber)');
+    }, 2800);
+    // stage 3: still no answer → call Anoop to inform
+    setTimeout(() => {
+      if (state.phase !== 'occluded') return;
+      setPill('urgent', 'Calling Anoop');
+      setChip('urgent', 'Rung 4 · Notify caretaker');
+      $('heroTitle').textContent = 'Meera has not responded · calling Anoop to inform';
+      $('heroSub').textContent = 'Camera still covered · no voice answer · informing Anoop — no distress is being claimed.';
+      tLine('—', 'no answer', true);
+      audit('rung 4', 'no answer · caretaker informed · camera covered', 'var(--clay)');
+      setActions([
+        { label: 'Acknowledge', cls: 'btn btn-primary', fn: ack },
+      ]);
+    }, 7600);
+  }
+
+  function stopTimers() {
+    clearInterval(state.waitTimer); state.waitTimer = null;
+    state.demoTimers.forEach(clearTimeout); state.demoTimers = [];
+  }
+
+  // ══════════ EMERGENCY GATE ══════════
+  let holdT1, holdT2;
+  function openGate() {
+    $('gateBackdrop').classList.add('open');
+    $('gateCancel').focus();
+  }
+  function closeGate() {
+    $('gateBackdrop').classList.remove('open');
+    cancelHold();
+  }
+  function cancelHold() {
+    clearTimeout(holdT1); clearTimeout(holdT2);
+    $('gateHold').querySelector('.progress').style.width = '0%';
+    $('gateHold').querySelector('.lbl').textContent = 'Hold 3s to review enabling';
+  }
+  $('gateHold').addEventListener('pointerdown', () => {
+    const prog = $('gateHold').querySelector('.progress');
+    const lbl = $('gateHold').querySelector('.lbl');
+    const t0 = Date.now();
+    holdT1 = setInterval(() => {
+      const pct = Math.min(100, (Date.now() - t0) / 30);
+      prog.style.width = pct + '%';
+    }, 50);
+    holdT2 = setTimeout(() => {
+      cancelHold();
+      lbl.textContent = 'Hard-locked in this build — a live install would require re-enabling in care plan settings';
+      audit('gate', 'emergency review opened · remains disabled', 'var(--clay)');
+      toast('Emergency dial stays off — no call can be placed from this build');
+    }, 3000);
+  });
+  ['pointerup', 'pointerleave'].forEach(ev => $('gateHold').addEventListener(ev, cancelHold));
+  $('gateCancel').addEventListener('click', closeGate);
+  $('gateBackdrop').addEventListener('click', (e) => { if (e.target === $('gateBackdrop')) closeGate(); });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && $('gateBackdrop').classList.contains('open')) closeGate();
+  });
+
+  // ══════════ D-PAD FOCUS ══════════
+  // Arrow keys move focus spatially among focusable elements — approximates a Fire TV remote.
+  const focusables = () => Array.from(document.querySelectorAll('.btn:not([disabled]), .console-btn:not([disabled]), .console-toggle, .card[tabindex], .gate-hold, .gate-cancel'))
+    .filter(el => el.offsetParent !== null && !el.closest('.gate-backdrop:not(.open)'));
+  function spatialMove(dx, dy) {
+    const items = focusables();
+    if (!items.length) return;
+    const cur = document.activeElement;
+    const curIdx = items.indexOf(cur);
+    if (curIdx === -1) { items[0].focus(); syncFocusClass(); return; }
+    const r = cur.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    let best = null, bestD = Infinity;
+    items.forEach(el => {
+      if (el === cur) return;
+      const b = el.getBoundingClientRect();
+      const bx = b.left + b.width / 2, by = b.top + b.height / 2;
+      const vdx = bx - cx, vdy = by - cy;
+      if (dx && Math.sign(vdx) !== dx) return;
+      if (dy && Math.sign(vdy) !== dy) return;
+      if (!dx && !dy) return;
+      const dist = (dx ? (vdx * vdx) : 0) + (dy ? (vdy * vdy) : 0) + (dx ? vdy * vdy * 0.4 : vdx * vdx * 0.4);
+      if (dist < bestD) { bestD = dist; best = el; }
+    });
+    if (best) { best.focus(); syncFocusClass(); }
+  }
+  function syncFocusClass() {
+    document.querySelectorAll('.btn.focused').forEach(b => b.classList.remove('focused'));
+    if (document.activeElement && document.activeElement.classList.contains('btn')) {
+      document.activeElement.classList.add('focused');
+    }
+  }
+  document.addEventListener('keydown', (e) => {
+    const map = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+    if (map[e.key]) {
+      e.preventDefault();
+      spatialMove(...map[e.key]);
+    }
+  });
+  document.addEventListener('focusin', syncFocusClass);
+
+  // ══════════ CONSOLE ══════════
+  $('consoleToggle').addEventListener('click', () => {
+    const open = $('console').classList.toggle('open');
+    $('consoleToggle').setAttribute('aria-expanded', open);
+  });
+  $('cCue').addEventListener('click', () => { if (state.phase === 'allclear' || state.phase === 'occluded') toRecheck(); else toast('Reset first to fire a new cue'); });
+  $('cAnswer').addEventListener('click', () => { if (state.phase === 'checkin') resolveByAnswer(); else toast('No check-in running'); });
+  $('cExpire').addEventListener('click', () => { if (state.phase === 'checkin') { state.waitLeft = 1; } else toast('Nothing to expire'); });
+  $('cOccluded').addEventListener('click', () => { if (state.phase === 'allclear') toOccluded(); else toast('Reset first'); });
+  $('cReset').addEventListener('click', () => toAllClear());
+  $('cAuto').addEventListener('click', () => {
+    toAllClear(true);
+    const seq = [
+      [400, () => toRecheck()],
+      [3400, () => toCheckin()],
+      [5600, () => { state.waitLeft = 23; renderWait(); }],
+      [7800, () => { state.waitLeft = 2; renderWait(); }],
+      [9600, () => toNotify()],
+      [12400, () => ack()],
+    ];
+    seq.forEach(([t, fn]) => state.demoTimers.push(setTimeout(fn, t)));
+    toast('Auto demo running — full ladder in ~13s');
+  });
+
+  // seed a quiet history so the audit never looks empty on load
+  audit('rung 2', 'earlier check-in resolved · 11:02 · answered attempt 1', 'var(--sage)');
+  toAllClear(true);
+
+  // ── Deep links for demos / screenshots: #demo=checkin|notify|resolved|occluded|auto ──
+  const deepLink = (() => {
+    const m = location.hash.match(/demo=(\w+)/);
+    return m ? m[1] : null;
+  })();
+  if (deepLink === 'checkin') {
+    setTimeout(() => { toRecheck(); }, 100);
+  } else if (deepLink === 'notify') {
+    setTimeout(() => { toRecheck(); }, 100);
+    state.demoTimers.push(setTimeout(() => toCheckin(), 700));
+    state.demoTimers.push(setTimeout(() => { state.waitLeft = 3; renderWait(); }, 1200));
+  } else if (deepLink === 'resolved') {
+    setTimeout(() => { toRecheck(); }, 100);
+    state.demoTimers.push(setTimeout(() => toCheckin(), 700));
+    state.demoTimers.push(setTimeout(() => { state.waitLeft = 3; renderWait(); }, 1200));
+    state.demoTimers.push(setTimeout(() => { ack(); }, 2600));
+  } else if (deepLink === 'occluded') {
+    setTimeout(() => toOccluded(), 100);
+  }
+})();
+</script>
+</body>
+</html>

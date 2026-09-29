@@ -1,0 +1,62 @@
+# Amazon Build, Ship, Shape demo household (PRD 2026-09-26).
+# Picture/VO copy uses resident / primary contact (no personal names).
+# OpenCV demo config (demo_home.yaml) is untouched; this plan drives the
+# Alexa+ check-in ladder: cue -> reperceive -> alexa_checkin x2 -> wait 45s ->
+# notify caretaker -> request_call (optional) -> emergency (off, fail-closed).
+household_id: amazon-demo-1
+caregiver:
+  display_name: Primary contact
+  phone_e164: "+12125550176"   # (555) 010-2276 - reserved NPA-555-01XX fiction
+secondary:
+  display_name: Secondary contact
+  phone_e164: "+12125550182"   # reserved NPA-555-01XX fiction
+monitored:
+  display_name: Resident
+zones:
+  - id: living_room
+    polygon: [[0, 0], [640, 0], [640, 480], [0, 480]]
+triggers:
+  no_movement:
+    enabled: true
+    timeout_sec: 240            # PRD: living-room stillness 4m
+  no_visibility:
+    enabled: true
+  distress_heuristic:
+    enabled: true
+rungs:
+  - id: reperceive
+    tool: reperceive
+    params: { roi: auto }
+  - id: alexa_checkin
+    tool: alexa_checkin
+    params:
+      attempts: 2
+      prompt_1: "Resident, are you okay?"
+      prompt_2: "Resident, it's the primary contact's Care Ladder - can you hear me?"
+      occlusion_prompt: "Resident, the camera is covered - could you move the blanket?"
+  - id: wait_window
+    tool: wait_window
+    params: { sec: 45 }
+  - id: notify_caretaker
+    tool: notify_caretaker
+    params:
+      channels: [push_mock, fire_tv]
+      role: caregiver
+  - id: request_call
+    tool: request_call
+    params:
+      role: caregiver
+      simulated: true
+  - id: emergency
+    tool: emergency
+    params: { enabled: false }
+quiet_hours:
+  start: "22:00"
+  end: "07:00"
+  policy: soft_suppress_non_distress
+
+learning:
+  enabled: true
+  settled_after_days: 10
+  min_no_movement_timeout_sec: 120
+  rapid_timeout_factor: 0.4

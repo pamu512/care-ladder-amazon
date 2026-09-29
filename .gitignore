@@ -1,0 +1,7 @@
+models/*.onnx
+.DS_Store
+.venv/
+__pycache__/
+*.egg-info/
+clips/*.avi
+clips/meta

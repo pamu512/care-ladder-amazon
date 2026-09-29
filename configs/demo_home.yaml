@@ -1,0 +1,51 @@
+household_id: demo-home-1
+caregiver:
+  display_name: Alex
+  phone_e164: "+12125550101"   # reserved fiction in demos
+secondary:
+  display_name: Sam
+  phone_e164: "+12125550102"   # reserved fiction in demos
+monitored:
+  display_name: Pat
+zones:
+  - id: living_room
+    polygon: [[0, 0], [640, 0], [640, 480], [0, 480]]
+triggers:
+  no_movement:
+    enabled: true
+    timeout_sec: 900
+  no_visibility:
+    enabled: true
+  distress_heuristic:
+    enabled: true
+rungs:
+  - id: reperceive
+    tool: reperceive
+    params: { roi: auto }
+  - id: ask_ok
+    tool: speaker_prompt
+    params:
+      text: "Are you okay? Do you want me to call Alex?"
+      channel: nest_or_alexa_then_phone
+  - id: wait_reply
+    tool: wait
+    params: { sec: 120 }
+  - id: dial_primary
+    tool: dial_contact
+    params: { contact: caregiver }
+  - id: dial_secondary
+    tool: dial_contact
+    params: { contact: secondary }
+  - id: emergency
+    tool: emergency
+    params: { enabled: false }   # fail-closed unless explicitly true
+quiet_hours:
+  start: "22:00"
+  end: "07:00"
+  policy: soft_suppress_non_distress
+
+learning:
+  enabled: true
+  settled_after_days: 10
+  min_no_movement_timeout_sec: 120
+  rapid_timeout_factor: 0.4

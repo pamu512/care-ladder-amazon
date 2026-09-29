@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "care-ladder"
+version = "0.1.0"
+description = "Alexa+ / Fire TV care ladder — self-hosted MCP Streamable HTTP agent and silhouette caregiver dashboard"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "mcp>=2.2.0",
+  "pydantic>=2",
+  "pyyaml",
+  "opencv-python>=5.0.0.93",
+  "fastapi",
+  "python-multipart",
+  "boto3",
+  "uvicorn",
+  "pytest",
+  "httpx2>=2.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "httpx2>=2.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+filterwarnings = [
+  # Starlette TestClient still references anyio.abc.BlockingPortal (upstream).
+  "ignore:The anyio.abc.BlockingPortal alias is deprecated.*:DeprecationWarning",
+]

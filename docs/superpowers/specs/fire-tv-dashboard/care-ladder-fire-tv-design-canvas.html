@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Care Ladder — Fire TV Dashboard · Design Canvas</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #161411;
+    --bg-subtle: #1c1915;
+    --surface: #221f1a;
+    --surface-raised: #2a2620;
+    --border: rgba(239,234,226,0.07);
+    --border-hover: rgba(239,234,226,0.14);
+    --accent: #d9a05b;
+    --accent-dim: rgba(217,160,91,0.15);
+    --sage: #a8b5a0;
+    --text: #efeae2;
+    --text-secondary: rgba(239,234,226,0.62);
+    --text-tertiary: rgba(239,234,226,0.34);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.35), 0 2px 6px rgba(0,0,0,0.25);
+    --shadow-lg: 0 12px 40px rgba(0,0,0,0.45), 0 4px 12px rgba(0,0,0,0.3);
+    --shadow-drag: 0 20px 60px rgba(0,0,0,0.5), 0 0 0 1.5px var(--accent);
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-lg: 14px;
+    --font-sans: "Instrument Sans", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+    --note-bg: #2a241c;
+    --note-border: rgba(217,160,91,0.22);
+    --transition-fast: 120ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    --transition-normal: 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    font-family: var(--font-sans);
+    color: var(--text);
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0.035;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitchTiles'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 512px 512px;
+    mix-blend-mode: overlay;
+  }
+
+  .canvas-viewport { position: fixed; inset: 0; overflow: hidden; cursor: grab; --grid-color: rgba(239,234,226,0.045); }
+  .canvas-viewport.panning { cursor: grabbing; }
+  .canvas-world { position: absolute; left: 0; top: 0; width: 20000px; height: 20000px; transform-origin: 0 0; will-change: transform; }
+
+  .canvas-el { position: absolute; cursor: grab; transition: box-shadow var(--transition-normal), transform var(--transition-fast); }
+  .canvas-el:hover { z-index: 10; }
+  .canvas-el.dragging { cursor: grabbing; z-index: 999; box-shadow: var(--shadow-drag) !important; transform: scale(1.01); transition: none; }
+
+  .section-header { position: absolute; pointer-events: none; display: flex; align-items: center; gap: 16px; white-space: nowrap; }
+  .section-header .section-num { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.08em; color: var(--accent); opacity: 0.85; }
+  .section-header .section-label { font-size: 11px; font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); }
+  .section-header .section-line { flex: none; width: 48px; height: 1px; background: linear-gradient(90deg, var(--accent) 0%, transparent 100%); opacity: 0.35; }
+
+  .canvas-title { position: absolute; pointer-events: none; font-weight: 700; line-height: 1.12; letter-spacing: -0.02em; color: var(--text); }
+  .canvas-text { position: absolute; line-height: 1.7; letter-spacing: 0.005em; color: var(--text-secondary); min-width: 200px; max-width: 560px; white-space: pre-wrap; word-break: break-word; }
+
+  .canvas-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 14px; border-radius: 100px; font-size: 12px; font-weight: 500; letter-spacing: 0.02em; color: var(--text-secondary); background: var(--surface); border: 1px solid var(--border); transition: border-color var(--transition-fast), background var(--transition-fast); white-space: nowrap; }
+  .canvas-tag:hover { border-color: var(--border-hover); background: var(--surface-raised); }
+  .canvas-tag .tag-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); flex-shrink: 0; }
+
+  .context-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; min-width: 220px; transition: border-color var(--transition-normal), box-shadow var(--transition-normal); }
+  .context-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); }
+  .context-card .card-head { padding: 16px 20px 12px; display: flex; align-items: center; gap: 10px; }
+  .context-card .card-head .head-indicator { width: 3px; height: 16px; border-radius: 2px; background: var(--accent); flex-shrink: 0; }
+  .context-card .card-head h3 { font-size: 13px; font-weight: 600; letter-spacing: 0.01em; color: var(--text); }
+  .context-card .card-content { padding: 0 20px 20px; font-size: 13px; line-height: 1.7; color: var(--text-secondary); }
+  .context-card .card-content ul { list-style: none; padding: 0; }
+  .context-card .card-content li { padding: 4px 0 4px 12px; position: relative; }
+  .context-card .card-content li::before { content: ''; position: absolute; left: 0; top: 11px; width: 4px; height: 4px; border-radius: 50%; background: var(--text-tertiary); }
+
+  .ds-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; transition: border-color var(--transition-normal), box-shadow var(--transition-normal); }
+  .ds-card:hover { border-color: var(--border-hover); box-shadow: var(--shadow-md); }
+  .ds-card .ds-head { padding: 16px 20px 12px; font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-tertiary); }
+  .ds-card .ds-body { padding: 0 20px 20px; }
+
+  .canvas-note { background: var(--note-bg); border: 1px solid var(--note-border); border-radius: var(--radius-md); padding: 16px 18px; min-width: 200px; max-width: 300px; box-shadow: var(--shadow-sm); }
+  .canvas-note .note-tag { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent); opacity: 0.75; margin-bottom: 8px; }
+  .canvas-note .note-body { font-size: 13px; line-height: 1.65; color: var(--text-secondary); }
+
+  .design-page { background: #24221e; border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-lg); }
+  .page-label { position: absolute; bottom: -32px; left: 0; font-size: 11px; font-weight: 500; letter-spacing: 0.02em; color: var(--text-tertiary); white-space: nowrap; display: flex; align-items: center; gap: 8px; }
+  .page-label .label-num { font-family: var(--font-mono); font-size: 10px; color: var(--accent); opacity: 0.7; }
+
+  .canvas-diagram { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .canvas-diagram .diagram-content { width: 100%; height: 100%; padding: 20px; }
+
+  .zoom-controls { position: fixed; bottom: 24px; right: 24px; display: flex; align-items: center; gap: 1px; z-index: 100; background: var(--bg-subtle); border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; box-shadow: var(--shadow-md); }
+  .zoom-btn { width: 36px; height: 36px; background: transparent; border: none; color: var(--text-secondary); font-size: 15px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background var(--transition-fast), color var(--transition-fast); }
+  .zoom-btn:hover { background: rgba(239,234,226,0.06); color: var(--text); }
+  .zoom-label { min-width: 50px; height: 36px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); border-left: 1px solid var(--border); border-right: 1px solid var(--border); }
+
+  .coord-indicator { position: fixed; bottom: 28px; left: 24px; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.04em; color: var(--text-tertiary); z-index: 100; padding: 4px 10px; background: rgba(22,20,17,0.85); border: 1px solid var(--border); border-radius: var(--radius-sm); }
+</style>
+<!--
+  Discovery (audit trail):
+    deliverable: Infinite canvas design file — Care Ladder Fire TV caregiver dashboard (App-class, 2-of-2)
+    audience: Anoop + Build/Ship/Shape hackathon judges; emotion target = calm trust
+    direction: Calm Care-Tech (locked via user selection 2026-09-26)
+      empathy + audit-grade clarity + anti-voyeurism (no live video; silhouettes only; on-device framing)
+    sections: Row1 context / Row2 design system / Row3 five screens (All clear → Check-in → Escalation → Timeline → Care plan)
+    tokens: bg #24221E · surface #2E2B25 · sage #A8B5A0 · amber #D9A05B · cream #EFEAE2 · clay #D98873 · slate #9DB0C7
+    type: Instrument Sans (display+body) + JetBrains Mono (audit data) — Inter/Space Grotesk avoided per anti-slop craft
+-->
+<body>
+
+<div class="canvas-viewport" id="viewport">
+  <div class="canvas-world" id="world"></div>
+</div>
+
+<div class="zoom-controls">
+  <button class="zoom-btn" id="zoomOut" aria-label="Zoom out">&#8722;</button>
+  <div class="zoom-label" id="zoomLabel">100%</div>
+  <button class="zoom-btn" id="zoomIn" aria-label="Zoom in">+</button>
+  <button class="zoom-btn" id="zoomReset" title="Reset view" aria-label="Reset view">&#8962;</button>
+</div>
+
+<div class="coord-indicator" id="coordIndicator">0, 0</div>
+
+<script>
+(() => {
+  const viewport = document.getElementById('viewport');
+  const world = document.getElementById('world');
+  const zoomLabel = document.getElementById('zoomLabel');
+  const coordIndicator = document.getElementById('coordIndicator');
+
+  let panX = 0, panY = 0, zoom = 1;
+  const MIN_ZOOM = 0.05, MAX_ZOOM = 8;
+
+  function updateTransform() {
+    world.style.transform = `translate(${panX}px,${panY}px) scale(${zoom})`;
+    zoomLabel.textContent = Math.round(zoom * 100) + '%';
+    updateGrid();
+  }
+  function updateGrid() {
+    const g = 40 * zoom;
+    const ox = panX % g, oy = panY % g;
+    viewport.style.backgroundImage = `radial-gradient(circle, var(--grid-color) 0.8px, transparent 0.8px)`;
+    viewport.style.backgroundSize = `${g}px ${g}px`;
+    viewport.style.backgroundPosition = `${ox}px ${oy}px`;
+  }
+
+  let isPanning = false, panSX, panSY;
+  viewport.addEventListener('pointerdown', (e) => {
+    if (e.target === viewport || e.target === world) {
+      isPanning = true; panSX = e.clientX - panX; panSY = e.clientY - panY;
+      viewport.classList.add('panning'); viewport.setPointerCapture(e.pointerId); e.preventDefault();
+    }
+  });
+  viewport.addEventListener('pointermove', (e) => {
+    if (isPanning) { panX = e.clientX - panSX; panY = e.clientY - panSY; updateTransform(); }
+  });
+  viewport.addEventListener('pointerup', () => { isPanning = false; viewport.classList.remove('panning'); });
+
+  viewport.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    if (e.ctrlKey || e.metaKey) {
+      const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+      const wx = (mx - panX) / zoom, wy = (my - panY) / zoom;
+      const factor = e.deltaY > 0 ? 0.95 : 1.05;
+      zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+      panX = mx - wx * zoom; panY = my - wy * zoom;
+    } else {
+      const hasX = Math.abs(e.deltaX) > 0.5;
+      if (hasX || Math.abs(e.deltaX) > Math.abs(e.deltaY) * 0.3) { panX -= e.deltaX; panY -= e.deltaY; }
+      else {
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        const wx = (mx - panX) / zoom, wy = (my - panY) / zoom;
+        const factor = e.deltaY > 0 ? 0.95 : 1.05;
+        zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+        panX = mx - wx * zoom; panY = my - wy * zoom;
+      }
+    }
+    updateTransform();
+  }, { passive: false });
+
+  function zoomAt(factor) {
+    const r = viewport.getBoundingClientRect();
+    const cx = r.width / 2, cy = r.height / 2;
+    const wx = (cx - panX) / zoom, wy = (cy - panY) / zoom;
+    zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
+    panX = cx - wx * zoom; panY = cy - wy * zoom;
+    updateTransform();
+  }
+  document.getElementById('zoomIn').onclick = () => zoomAt(1.25);
+  document.getElementById('zoomOut').onclick = () => zoomAt(0.8);
+  document.getElementById('zoomReset').onclick = () => { zoom = 0.9; panX = 40; panY = 20; updateTransform(); };
+
+  viewport.addEventListener('pointermove', (e) => {
+    if (isPanning) return;
+    const r = viewport.getBoundingClientRect();
+    coordIndicator.textContent = `${Math.round((e.clientX - r.left - panX) / zoom)}, ${Math.round((e.clientY - r.top - panY) / zoom)}`;
+  });
+
+  let lastPinchDist = null, lastPinchCenter = null;
+  viewport.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+      const t0 = e.touches[0], t1 = e.touches[1];
+      lastPinchDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+      lastPinchCenter = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+      e.preventDefault();
+    }
+  }, { passive: false });
+  viewport.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 2) return;
+    e.preventDefault();
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    const center = { x: (t0.clientX + t1.clientX) / 2, y: (t0.clientY + t1.clientY) / 2 };
+    if (lastPinchDist > 0) {
+      const r = viewport.getBoundingClientRect();
+      const mx = center.x - r.left, my = center.y - r.top;
+      const wx = (mx - panX) / zoom, wy = (my - panY) / zoom;
+      zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * Math.pow(dist / lastPinchDist, 0.6)));
+      panX = mx - wx * zoom; panY = my - wy * zoom;
+    }
+    if (lastPinchCenter) { panX += center.x - lastPinchCenter.x; panY += center.y - lastPinchCenter.y; }
+    lastPinchDist = dist; lastPinchCenter = center;
+    updateTransform();
+  }, { passive: false });
+  viewport.addEventListener('touchend', (e) => { if (e.touches.length < 2) { lastPinchDist = null; lastPinchCenter = null; } });
+
+  const undoStack = [];
+  function saveUndo() {
+    const s = [];
+    world.querySelectorAll('.canvas-el').forEach(el => s.push({ id: el.id, left: el.style.left, top: el.style.top }));
+    undoStack.push({ panX, panY, zoom, assets: s });
+    if (undoStack.length > 60) undoStack.shift();
+  }
+  function undo() {
+    if (!undoStack.length) return;
+    const st = undoStack.pop();
+    panX = st.panX; panY = st.panY; zoom = st.zoom;
+    st.assets.forEach(a => { const el = document.getElementById(a.id); if (el) { el.style.left = a.left; el.style.top = a.top; } });
+    updateTransform();
+  }
+  document.addEventListener('keydown', (e) => { if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); undo(); } });
+
+  function makeDraggable(el) {
+    let dragging = false, sx, sy, ox, oy;
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0) return;
+      dragging = true; el.classList.add('dragging'); saveUndo();
+      sx = e.clientX; sy = e.clientY;
+      ox = parseFloat(el.style.left); oy = parseFloat(el.style.top);
+      el.setPointerCapture(e.pointerId); e.stopPropagation();
+    });
+    el.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      el.style.left = (ox + (e.clientX - sx) / zoom) + 'px';
+      el.style.top = (oy + (e.clientY - sy) / zoom) + 'px';
+    });
+    el.addEventListener('pointerup', () => { if (dragging) { dragging = false; el.classList.remove('dragging'); } });
+  }
+
+  let _id = 0;
+  function uid(prefix) { return (prefix || 'el') + '-' + (++_id); }
+
+  function addSection(rowY, label) {
+    const parts = label.split(' ');
+    const num = parts[0] || '';
+    const rest = parts.slice(1).join(' ');
+    const el = document.createElement('div');
+    el.className = 'section-header';
+    el.style.left = '60px'; el.style.top = rowY + 'px';
+    el.innerHTML = `<span class="section-line"></span><span class="section-num">${num}</span><span class="section-label">${rest}</span>`;
+    world.appendChild(el);
+    return rowY;
+  }
+  function addTitle(x, y, text, options = {}) {
+    const el = document.createElement('div');
+    el.className = 'canvas-title'; el.id = uid('title');
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    el.style.fontSize = (options.fontSize || 48) + 'px';
+    if (options.fontWeight) el.style.fontWeight = options.fontWeight;
+    if (options.maxWidth) el.style.maxWidth = options.maxWidth + 'px';
+    el.textContent = text;
+    world.appendChild(el); return el;
+  }
+  function addText(x, y, text, options = {}) {
+    const el = document.createElement('div');
+    el.className = 'canvas-text canvas-el'; el.id = uid('text');
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    el.style.fontSize = (options.fontSize || 14) + 'px';
+    if (options.maxWidth) el.style.maxWidth = options.maxWidth + 'px';
+    el.textContent = text;
+    world.appendChild(el); makeDraggable(el); return el;
+  }
+  function addTag(x, y, label, options = {}) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el'; el.id = uid('tag');
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    const dotColor = options.color || 'var(--accent)';
+    el.innerHTML = `<div class="canvas-tag"><span class="tag-dot" style="background:${dotColor}"></span>${label}</div>`;
+    world.appendChild(el); makeDraggable(el); return el;
+  }
+  function addContextCard(x, y, w, h, title, content) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el'; el.id = uid('ctx');
+    el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = w + 'px';
+    if (h) el.style.height = h + 'px';
+    el.innerHTML = `<div class="context-card" style="width:100%;${h ? 'height:100%' : ''}">
+      <div class="card-head"><div class="head-indicator"></div><h3>${title}</h3></div>
+      <div class="card-content">${content}</div></div>`;
+    world.appendChild(el); makeDraggable(el); return el;
+  }
+  function addDesignSystemCard(x, y, w, h, type, data) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el'; el.id = uid('ds');
+    el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = w + 'px';
+    if (h) el.style.height = h + 'px';
+    let body = data.html || '';
+    el.innerHTML = `<div class="ds-card" style="width:100%;${h ? 'height:100%' : ''}">
+      <div class="ds-head">${data.title || type}</div><div class="ds-body">${body}</div></div>`;
+    world.appendChild(el); makeDraggable(el); return el;
+  }
+  function addNote(x, y, tag, text) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el'; el.id = uid('note');
+    el.style.left = x + 'px'; el.style.top = y + 'px';
+    el.innerHTML = `<div class="canvas-note"><div class="note-tag">${tag}</div><div class="note-body">${text}</div></div>`;
+    world.appendChild(el); makeDraggable(el); return el;
+  }
+  function addDiagram(x, y, w, h, htmlContent) {
+    const el = document.createElement('div');
+    el.className = 'canvas-el'; el.id = uid('diagram');
+    el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = w + 'px'; el.style.height = h + 'px';
+    el.innerHTML = `<div class="canvas-diagram" style="width:100%;height:100%;"><div class="diagram-content">${htmlContent}</div></div>`;
+    world.appendChild(el); makeDraggable(el); return el;
+  }
+  let _pageNum = 0;
+  function addPage(x, y, w, h, label, htmlContent) {
+    _pageNum++;
+    const el = document.createElement('div');
+    el.className = 'canvas-el'; el.id = uid('page');
+    el.style.left = x + 'px'; el.style.top = y + 'px'; el.style.width = w + 'px'; el.style.height = (h + 40) + 'px';
+    el.innerHTML = `<div class="design-page" style="width:${w}px;height:${h}px;"><div style="width:100%;height:100%;overflow:hidden;">${htmlContent}</div></div>
+    <div class="page-label"><span class="label-num">${String(_pageNum).padStart(2,'0')}</span>${label}</div>`;
+    world.appendChild(el); makeDraggable(el); return el;
+  }
+
+  function below(el, gap) { if (gap === undefined) gap = 20; return parseFloat(el.style.top) + el.offsetHeight + gap; }
+  function rightOf(el, gap) { if (gap === undefined) gap = 20; return parseFloat(el.style.left) + el.offsetWidth + gap; }
+  function maxY(els, gap) { if (gap === undefined) gap = 20; return Math.max(...els.map(e => parseFloat(e.style.top) + e.offsetHeight)) + gap; }
+
+  /* ═══════════ CARE LADDER CANVAS SCENE ═══════════ */
+  function buildScene() {
+
+    /* ── Row 1 · PROJECT CONTEXT ── */
+    addSection(40, '01 · PROJECT CONTEXT');
+
+    const r1Title = addTitle(100, 96, 'Care Ladder · Fire TV Caregiver Dashboard', { fontSize: 46, fontWeight: 700, maxWidth: 900 });
+    const r1Desc = addText(100, below(r1Title, 14),
+      'The caretaker surface of Care Ladder — a 10-foot Fire TV dashboard for the Amazon Build, Ship, Shape hackathon (Alexa+ primary track).\nOpenCV notices something might be wrong. Alexa+ runs a multi-step voice check-in. The ladder confirms before it escalates.\nThis TV shows the caretaker what happened, which rung the agent is on, and what to do next — calm enough to live in a family living room.',
+      { fontSize: 15, maxWidth: 640 });
+
+    const tagsY = below(r1Desc, 18);
+    const t1 = addTag(100, tagsY, 'Alexa+ primary', { color: '#d9a05b' });
+    const t2 = addTag(rightOf(t1, 10), tagsY, 'OpenCV trigger', { color: '#a8b5a0' });
+    const t3 = addTag(rightOf(t2, 10), tagsY, 'Fire TV surface', { color: '#d9a05b' });
+    const t4 = addTag(rightOf(t3, 10), tagsY, '10-foot UI', { color: '#a8b5a0' });
+    const t5 = addTag(rightOf(t4, 10), tagsY, 'Calm Care-Tech', { color: '#d9a05b' });
+    addTag(rightOf(t5, 10), tagsY, 'Anti-voyeurism by design', { color: '#9db0c7' });
+
+    const cardsY = below(t1, 28);
+    const c1 = addContextCard(100, cardsY, 300, null, 'What it is',
+      '<ul><li>Fail-closed care ladder, not an alarm cannon</li><li>Five rungs: re-perceive → voice check-in → wait → notify → call</li><li>Emergency rung ships off, behind a hard human gate</li><li>Every step leaves an audit trail</li></ul>');
+    const c2 = addContextCard(440, cardsY, 300, null, 'Who it serves',
+      '<ul><li>Monitored person — Meera, living alone (demo persona)</li><li>Primary caretaker — Anoop, via Fire TV + push</li><li>Household configurer — sets zones, timeouts, contacts</li><li>Hackathon judges — must see required Alexa+ tech at runtime</li></ul>');
+    const c3 = addContextCard(780, cardsY, 300, null, 'Problem it solves',
+      '<ul><li>Solo families cannot staff a camera 24/7</li><li>Alert spam trains caretakers to ignore</li><li>Single-turn "are you okay?" bots are not enough</li><li>The ladder confirms first, escalates only on silence</li></ul>');
+    const c4 = addContextCard(1120, cardsY, 300, null, 'Design pillars (user-locked)',
+      '<ul><li><strong>Empathetic</strong> — warm home object, never a control room</li><li><strong>Audit-grade clarity</strong> — mono timestamps, full rung history</li><li><strong>Never voyeuristic</strong> — silhouettes only, frames stay on device</li></ul>');
+
+    const diagY = maxY([c1, c2, c3, c4], 36);
+    const ladderDiag = addDiagram(100, diagY, 1320, 150, `
+      <div style="font-size:11px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;color:rgba(239,234,226,0.4);margin-bottom:16px;">The care ladder — confirm before escalate</div>
+      <div style="display:flex;align-items:center;gap:0;">
+        ${[
+          ['1', 'Re-perceive', 'OpenCV re-checks the cue', '#a8b5a0', 'done'],
+          ['2', 'Voice check-in', 'Alexa+ multi-turn, session memory', '#d9a05b', 'current'],
+          ['3', 'Wait window', 'Silence within 45s advances', 'rgba(239,234,226,0.25)', 'todo'],
+          ['4', 'Notify caretaker', 'Push + Fire TV banner + Ack', 'rgba(239,234,226,0.25)', 'todo'],
+          ['5', 'Call contact', 'Reserved fictional number (demo)', 'rgba(239,234,226,0.25)', 'todo'],
+        ].map(([n, title, sub, color, state], i) => `
+          ${i > 0 ? '<div style="flex:1;height:2px;background:rgba(239,234,226,0.12);margin:0 10px;"></div>' : ''}
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;min-width:150px;">
+            <div style="width:44px;height:44px;border-radius:50%;border:2px solid ${color};display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:15px;color:${state==='current'?'#24221e':color};background:${state==='current'?color:'transparent'};font-weight:600;">${n}</div>
+            <div style="font-size:13px;font-weight:600;color:#efeae2;text-align:center;">${title}</div>
+            <div style="font-size:11px;color:rgba(239,234,226,0.5);text-align:center;max-width:170px;line-height:1.5;">${sub}</div>
+          </div>`).join('')}
+        <div style="flex:1;height:2px;background:rgba(239,234,226,0.12);margin:0 10px;"></div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:8px;min-width:130px;">
+          <div style="width:44px;height:44px;border-radius:50%;border:2px dashed rgba(217,136,115,0.6);display:flex;align-items:center;justify-content:center;color:#d98873;font-size:15px;">&#10007;</div>
+          <div style="font-size:13px;font-weight:600;color:#d98873;">Emergency</div>
+          <div style="font-size:11px;color:rgba(239,234,226,0.5);text-align:center;max-width:150px;line-height:1.5;">Off by default · hard human gate</div>
+        </div>
+      </div>`);
+
+    const noteY = below(ladderDiag, 32);
+    const n1 = addNote(100, noteY, 'Judging risk addressed', 'A working, D-pad-navigable dashboard — not a static mock slideshow. Demo console in the prototype drives every state live.');
+    const n2 = addNote(rightOf(n1, 20), noteY, 'Privacy stance', 'No live video anywhere in the UI. The room renders as a silhouette; raw frames never leave the device.');
+    const n3 = addNote(rightOf(n2, 20), noteY, 'Voice surface', 'Alexa+ check-in is multi-turn with incident memory. The TV quotes how the conversation went, not just pass/fail.');
+
+    /* ── Row 2 · DESIGN SYSTEM ── */
+    const r2Start = maxY([n1, n2, n3], 90);
+    addSection(r2Start, '02 · DESIGN SYSTEM');
+
+    addText(100, r2Start + 46, 'Calm Care-Tech — warm dark ground, sage for reassurance, amber for attention, mono for the audit trail. Accents are rationed: one attention color per screen.', { fontSize: 14, maxWidth: 900 });
+
+    const dsY = r2Start + 96;
+    const sw = (hex, name, token) => `<div style="display:flex;flex-direction:column;align-items:center;gap:8px;"><div style="width:52px;height:52px;border-radius:50%;background:${hex};box-shadow:var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.08);"></div><div style="font-size:10px;font-weight:500;color:var(--text-secondary);">${name}</div><div style="font-family:var(--font-mono);font-size:9px;color:var(--text-tertiary);">${hex}<br>${token}</div></div>`;
+    const colorCard = addDesignSystemCard(100, dsY, 500, null, 'color', { title: 'Color tokens', html: `
+      <div style="display:flex;gap:18px;flex-wrap:wrap;">
+        ${sw('#24221E', 'Ground', '--bg')}
+        ${sw('#2E2B25', 'Surface', '--surface')}
+        ${sw('#EFEAE2', 'Cream ink', '--ink')}
+        ${sw('#A8B5A0', 'Sage · ok', '--ok')}
+        ${sw('#D9A05B', 'Amber · attend', '--attend')}
+        ${sw('#D98873', 'Clay · urgent', '--urgent')}
+        ${sw('#9DB0C7', 'Slate · info', '--info')}
+      </div>
+      <div style="margin-top:16px;font-size:12px;color:var(--text-secondary);line-height:1.6;">Body text #EFEAE2 on #24221E ≈ 12:1 · sage ≈ 7:1 · amber ≈ 7:1 — all clear WCAG AA at TV distance.</div>` });
+
+    const typeCard = addDesignSystemCard(640, dsY, 430, null, 'typography', { title: 'Type scale · 10-foot', html: `
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:baseline;gap:16px;"><span style="font-family:var(--font-mono);font-size:9px;color:var(--text-tertiary);min-width:66px;">HERO 64</span><span style="font-size:40px;font-weight:700;letter-spacing:-0.02em;color:var(--text);">All clear</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;"><span style="font-family:var(--font-mono);font-size:9px;color:var(--text-tertiary);min-width:66px;">H1 40</span><span style="font-size:26px;font-weight:600;letter-spacing:-0.01em;color:var(--text);">Voice check-in running</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;"><span style="font-family:var(--font-mono);font-size:9px;color:var(--text-tertiary);min-width:66px;">BODY 20</span><span style="font-size:14px;color:var(--text-secondary);">Alexa asked twice. Waiting for Meera to answer.</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;"><span style="font-family:var(--font-mono);font-size:9px;color:var(--text-tertiary);min-width:66px;">MONO 13</span><span style="font-family:var(--font-mono);font-size:12px;color:var(--sage);">14:02:07 · rung 2 · wait 45s</span></div>
+      </div>
+      <div style="margin-top:16px;font-size:12px;color:var(--text-secondary);line-height:1.6;">Instrument Sans for voice · JetBrains Mono for timestamps, rungs, IDs. Nothing below 20px is load-bearing at couch distance; mono is read up close, during audit.</div>` });
+
+    const compCard = addDesignSystemCard(1100, dsY, 330, null, 'components', { title: 'Components', html: `
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <button style="padding:12px 26px;border-radius:12px;border:none;background:#d9a05b;color:#24221e;font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;">Acknowledge</button>
+        <button style="padding:12px 26px;border-radius:12px;border:1.5px solid rgba(239,234,226,0.25);background:transparent;color:#efeae2;font-size:14px;font-family:inherit;cursor:pointer;">Request call</button>
+        <button style="padding:12px 26px;border-radius:12px;border:1.5px dashed rgba(239,234,226,0.25);background:transparent;color:rgba(239,234,226,0.38);font-size:14px;font-family:inherit;cursor:not-allowed;">Emergency · off</button>
+        <div style="display:flex;gap:10px;">
+          <span style="padding:6px 14px;border-radius:999px;background:rgba(168,181,160,0.16);color:#a8b5a0;font-size:12px;font-weight:500;">Resolved</span>
+          <span style="padding:6px 14px;border-radius:999px;background:rgba(217,160,91,0.16);color:#d9a05b;font-size:12px;font-weight:500;">Checking in</span>
+          <span style="padding:6px 14px;border-radius:999px;background:rgba(157,176,199,0.14);color:#9db0c7;font-size:12px;font-weight:500;">Camera occluded</span>
+        </div>
+        <div style="padding:12px 18px;border-radius:12px;border:3px solid #d9a05b;outline:3px solid rgba(217,160,91,0.25);font-size:13px;color:#efeae2;">Focused card — 3px amber ring, 44px+ targets, D-pad order</div>
+      </div>` });
+
+    /* ── Row 3 · DESIGN DELIVERABLES ── */
+    const r3Start = maxY([colorCard, typeCard, compCard], 90);
+    addSection(r3Start, '03 · DESIGN DELIVERABLES');
+
+    const pagesY = r3Start + 56;
+
+    /* Screen 1 — All clear */
+    addPage(100, pagesY, 480, 270, 'All clear · standby', `
+      <div style="width:100%;height:100%;background:#24221E;font-family:var(--font-sans);padding:26px 30px;display:flex;flex-direction:column;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:11px;letter-spacing:0.08em;color:rgba(239,234,226,0.45);text-transform:uppercase;">Now · Meera's home</div>
+          <div style="display:flex;align-items:center;gap:6px;font-size:10px;color:#a8b5a0;"><span style="width:7px;height:7px;border-radius:50%;background:#a8b5a0;"></span>Care plan active</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+          <div style="font-size:38px;font-weight:700;letter-spacing:-0.02em;color:#efeae2;">All clear</div>
+          <div style="font-size:14px;color:rgba(239,234,226,0.6);margin-top:6px;">Meera settled after lunch · living room</div>
+        </div>
+        <div style="display:flex;gap:14px;font-family:var(--font-mono);font-size:10px;color:rgba(239,234,226,0.45);">
+          <span>Last check-in 11:02</span><span>·</span><span>Camera healthy</span><span>·</span><span>Plan active</span>
+        </div>
+      </div>`);
+
+    /* Screen 2 — Active check-in */
+    addPage(620, pagesY, 480, 270, 'Active incident · voice check-in', `
+      <div style="width:100%;height:100%;background:#24221E;font-family:var(--font-sans);padding:22px 26px;display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="padding:4px 12px;border-radius:999px;background:rgba(217,160,91,0.16);color:#d9a05b;font-size:11px;font-weight:600;">Rung 2 · Voice check-in</span><span style="font-family:var(--font-mono);font-size:10px;color:rgba(239,234,226,0.45);">INC-0042 · 14:02</span></div>
+        <div style="display:flex;gap:14px;flex:1;">
+          <div style="flex:1.3;display:flex;flex-direction:column;gap:10px;">
+            <div style="font-size:20px;font-weight:600;color:#efeae2;">Stillness noticed — living room</div>
+            <div style="font-size:12px;color:rgba(239,234,226,0.6);line-height:1.55;">Alexa: "Meera, are you okay?"<br>Waiting for answer · 2nd attempt</div>
+            <div style="display:flex;align-items:center;gap:4px;">${[0,1,2,3,4].map(i=>`<div style="flex:1;height:34px;border-radius:6px;${i<2?'background:rgba(217,160,91,0.75);':'background:rgba(239,234,226,0.1);'}"></div>`).join('')}<span style="font-family:var(--font-mono);font-size:10px;color:#d9a05b;margin-left:8px;">31s</span></div>
+          </div>
+          <div style="flex:0.9;border-radius:12px;background:linear-gradient(160deg,#2e2b25,#26231e);border:1px solid rgba(239,234,226,0.08);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;">
+            <div style="width:46px;height:46px;border-radius:50% 50% 12px 12px;background:rgba(239,234,226,0.16);"></div>
+            <div style="font-size:9px;letter-spacing:0.06em;color:rgba(239,234,226,0.4);text-transform:uppercase;">Silhouette · on-device</div>
+          </div>
+        </div>
+      </div>`);
+
+    /* Screen 3 — Escalation */
+    addPage(1140, pagesY, 480, 270, 'Escalation · notify caretaker', `
+      <div style="width:100%;height:100%;background:#24221E;font-family:var(--font-sans);padding:22px 26px;display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="padding:4px 12px;border-radius:999px;background:rgba(217,136,115,0.18);color:#d98873;font-size:11px;font-weight:600;">Rung 4 · Notify caretaker</span><span style="font-family:var(--font-mono);font-size:10px;color:rgba(239,234,226,0.45);">no answer × 2</span></div>
+        <div style="font-size:19px;font-weight:600;color:#efeae2;">Meera hasn't answered — Anoop, we need you</div>
+        <div style="display:flex;gap:12px;flex:1;">
+          <div style="flex:1;background:#2e2b25;border-radius:12px;padding:12px 14px;">
+            <div style="font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:rgba(239,234,226,0.4);margin-bottom:6px;">How the check-in went</div>
+            <div style="font-size:11.5px;color:rgba(239,234,226,0.75);line-height:1.6;">"Meera, are you okay?" — silence<br>"Meera, it's Anoop's Care Ladder…" — silence</div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px;justify-content:center;">
+            <div style="padding:10px;border-radius:10px;background:#d9a05b;color:#24221e;font-size:13px;font-weight:600;text-align:center;">Acknowledge</div>
+            <div style="padding:10px;border-radius:10px;border:1.5px solid rgba(239,234,226,0.25);color:#efeae2;font-size:13px;text-align:center;">Request call · (555) 010-2276</div>
+          </div>
+        </div>
+      </div>`);
+
+    /* Screen 4 — Timeline & audit */
+    addPage(1660, pagesY, 480, 270, 'Timeline · audit trail', `
+      <div style="width:100%;height:100%;background:#24221E;font-family:var(--font-sans);padding:22px 26px;display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:15px;font-weight:600;color:#efeae2;">Incident INC-0042 · today</div>
+        ${[
+          ['14:01:52', 'rung 1', 'no_movement · living room · 4m 12s still', '#a8b5a0'],
+          ['14:02:07', 'rung 2', 'Alexa+ check-in started · attempt 1', '#d9a05b'],
+          ['14:02:41', 'rung 2', 'attempt 2 · no speech detected', '#d9a05b'],
+          ['14:03:26', 'rung 3', 'wait window closed · 45s silence', 'rgba(239,234,226,0.4)'],
+          ['14:03:27', 'rung 4', 'caretaker notified · push + TV', '#d98873'],
+        ].map(([t, r, m, c]) => `
+        <div style="display:flex;gap:12px;align-items:baseline;border-bottom:1px solid rgba(239,234,226,0.06);padding-bottom:7px;">
+          <span style="font-family:var(--font-mono);font-size:10px;color:rgba(239,234,226,0.45);min-width:52px;">${t}</span>
+          <span style="font-family:var(--font-mono);font-size:10px;color:${c};min-width:44px;">${r}</span>
+          <span style="font-size:11.5px;color:rgba(239,234,226,0.75);">${m}</span>
+        </div>`).join('')}
+        <div style="font-family:var(--font-mono);font-size:9.5px;color:rgba(239,234,226,0.35);margin-top:auto;">Full trail exportable · every rung, every cue, every answer</div>
+      </div>`);
+
+    /* Screen 5 — Care plan */
+    addPage(2180, pagesY, 480, 270, 'Care plan · household config', `
+      <div style="width:100%;height:100%;background:#24221E;font-family:var(--font-sans);padding:22px 26px;display:flex;flex-direction:column;gap:12px;">
+        <div style="font-size:15px;font-weight:600;color:#efeae2;">Care plan · Meera's home</div>
+        <div style="display:flex;gap:12px;flex:1;">
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:rgba(239,234,226,0.4);">Zones & timeouts</div>
+            <div style="background:#2e2b25;border-radius:10px;padding:10px 12px;font-size:11.5px;color:rgba(239,234,226,0.75);line-height:1.7;">Living room · stillness 4m<br>Kitchen · no-show 90m<br>Bedroom · privacy hours 22–7</div>
+            <div style="font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:rgba(239,234,226,0.4);">Contacts</div>
+            <div style="background:#2e2b25;border-radius:10px;padding:10px 12px;font-size:11.5px;color:rgba(239,234,226,0.75);">1 Anoop · 2 Priya · 3 Neighbor</div>
+          </div>
+          <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+            <div style="font-size:10px;letter-spacing:0.06em;text-transform:uppercase;color:rgba(239,234,226,0.4);">Rung order</div>
+            <div style="display:flex;flex-direction:column;gap:5px;">${['Re-perceive','Voice check-in','Wait 45s','Notify Anoop','Call Anoop'].map((r,i)=>`<div style="display:flex;align-items:center;gap:8px;"><div style="width:20px;height:20px;border-radius:50%;border:1.5px solid ${i<5?'#a8b5a0':'rgba(239,234,226,0.2)'};display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:9px;color:#a8b5a0;">${i+1}</div><span style="font-size:11px;color:rgba(239,234,226,0.75);">${r}</span></div>`).join('')}</div>
+            <div style="margin-top:auto;border:1.5px dashed rgba(217,136,115,0.5);border-radius:10px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;">
+              <span style="font-size:11px;color:#d98873;">Emergency dial</span><span style="font-size:10px;color:rgba(239,234,226,0.45);">Off · hard gate</span>
+            </div>
+          </div>
+        </div>
+      </div>`);
+    /* privacy line removed from the care-plan mock per user review — screens match the product;
+       the privacy stance stays documented in the Row 1 note for judges */
+
+    const flowNoteY = maxY(Array.from(world.querySelectorAll('.canvas-el')).filter(el => parseFloat(el.style.top) >= pagesY - 5), 56);
+    addNote(100, flowNoteY, 'Flow order', 'Cue arrives → check-in runs → silence escalates → caretaker acknowledges → incident lands in the audit trail. All clear is the default state, not an afterthought.');
+    addNote(400, flowNoteY, 'Interactive twin', 'The companion prototype file drives all five screens live — D-pad focus, rung state machine, countdown timers, and the emergency gate.');
+  }
+
+  buildScene();
+
+  const r = viewport.getBoundingClientRect();
+  panX = r.width * 0.04;
+  panY = r.height * 0.03;
+  zoom = 0.9;
+  updateTransform();
+})();
+</script>
+</body>
+</html>

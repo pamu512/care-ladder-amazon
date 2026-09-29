@@ -1,0 +1,1051 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="dark light" />
+<title>Care Ladder - Caregiver Console</title>
+<!--
+  Care Ladder caregiver console - v2 redesign (hackathon build phase).
+  Drop-in replacement for src/care_ladder/api/static/index.html. No backend change
+  required; if GET /plan exists it is used to draw the full ladder (see improvement
+  plan), otherwise the rail renders the observed path from the audit events.
+
+  Font audit trail: system stacks only (-apple-system/Segoe UI + ui-monospace/Menlo) -
+    the console must run fully offline behind FastAPI StaticFiles: no font CDN, no icon CDN.
+  Icon audit trail: inline monoline SVG sprite (1.7px stroke, currentColor) - the console
+    must run offline behind FastAPI StaticFiles, so no icon CDN. No emoji as UI icons.
+  Type scale: 12 / 13 / 15 / 18 / 24 / 32. Two families total. Accent: teal/cyan -
+    continuity with the existing console (--accent #0e7490) and the repo's workflow diagram.
+-->
+<style>
+  :root{
+    --font-body:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
+    --font-mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --bg:#080c14; --surface:#0e1522; --surface-2:#121b2b; --inset:#0a101c;
+    --fg:#e9eff8; --muted:#9aa8bd; --faint:#66748c;
+    --border:rgba(255,255,255,.08); --border-strong:rgba(255,255,255,.16);
+    --accent:#2dd4e8; --accent-deep:#0e7490; --on-accent:#04161c;
+    --ok:#34d399; --ok-dim:rgba(52,211,153,.14);
+    --warn:#fbbf24; --warn-dim:rgba(251,191,36,.12);
+    --bad:#fb7185; --bad-dim:rgba(251,113,133,.14);
+    --info:#7dd3fc; --info-dim:rgba(125,211,252,.12);
+    --r-s:10px; --r-m:14px;
+    --shadow:0 14px 40px rgba(1,4,10,.5);
+    --dur:.16s;
+  }
+  [data-theme="light"]{
+    --bg:#f4f6fa; --surface:#ffffff; --surface-2:#f0f4f9; --inset:#e9eef5;
+    --fg:#101826; --muted:#4c5a70; --faint:#69758a;
+    --border:rgba(16,24,38,.12); --border-strong:rgba(16,24,38,.22);
+    --accent:#0e7490; --on-accent:#ffffff;
+    --ok:#0f8a5f; --ok-dim:rgba(15,138,95,.10);
+    --warn:#a16207; --warn-dim:rgba(161,98,7,.10);
+    --bad:#be2637; --bad-dim:rgba(190,38,55,.09);
+    --info:#075985; --info-dim:rgba(7,89,133,.09);
+    --shadow:0 14px 36px rgba(15,23,42,.10);
+  }
+  *{box-sizing:border-box;margin:0}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--font-body);
+    -webkit-font-smoothing:antialiased}
+  .skip{position:absolute;left:-9999px;top:0;background:var(--accent);color:var(--on-accent);
+    padding:10px 16px;border-radius:0 0 var(--r-s) 0;z-index:99;font-weight:600}
+  .skip:focus{left:0}
+  :focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+  svg.ic{width:16px;height:16px;flex:none;stroke-width:1.7}
+  a{color:inherit}
+
+  /* ---------- app bar ---------- */
+  header.appbar{position:sticky;top:0;z-index:20;background:color-mix(in srgb,var(--bg) 86%,transparent);
+    backdrop-filter:blur(10px);border-bottom:1px solid var(--border)}
+  .bar{max-width:1120px;margin:0 auto;padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:11px;min-width:0}
+  .mark{width:34px;height:34px;border-radius:9px;background:var(--accent);color:var(--on-accent);
+    display:grid;place-items:center;flex:none}
+  .mark svg{width:19px;height:19px;stroke-width:2}
+  .brand h1{font-size:17px;font-weight:650;letter-spacing:-.01em;line-height:1.15}
+  .brand .sub{font-size:11.5px;color:var(--muted);font-family:var(--font-mono);letter-spacing:.01em}
+  .bar-right{margin-left:auto;display:flex;align-items:center;gap:8px}
+  .chip[data-phase="rapid"]{color:var(--info);border-color:color-mix(in srgb,var(--info) 40%,transparent)}
+  .chip[data-phase="settled"]{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 40%,transparent)}
+  .chip[data-phase="frozen"]{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+  .chip{display:inline-flex;align-items:center;gap:6px;font:500 11.5px/1 var(--font-mono);
+    color:var(--muted);border:1px solid var(--border);border-radius:999px;padding:6px 11px}
+  .chip .dot{width:6px;height:6px;border-radius:50%;background:var(--ok)}
+  .iconbtn{display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;
+    border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--muted);
+    cursor:pointer;transition:color var(--dur),border-color var(--dur)}
+  .iconbtn:hover{color:var(--fg);border-color:var(--border-strong)}
+
+  /* ---------- console bar ---------- */
+  .consolebar{max-width:1120px;margin:18px auto 0;padding:0 20px}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m)}
+  .triggers{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap;padding:14px 18px}
+  .tgroup{display:flex;flex-direction:column;gap:8px}
+  .tgroup>span{font:600 10.5px/1 var(--font-mono);text-transform:uppercase;letter-spacing:.09em;color:var(--faint)}
+  .trow{display:flex;gap:8px;flex-wrap:wrap}
+  .btn{display:inline-flex;align-items:center;gap:8px;border:1px solid var(--border-strong);
+    background:var(--surface-2);color:var(--fg);border-radius:var(--r-s);padding:9px 14px;
+    font:500 13.5px/1 var(--font-body);cursor:pointer;min-height:40px;
+    transition:border-color var(--dur),background var(--dur),transform var(--dur)}
+  .btn:hover{border-color:var(--accent-deep)}
+  .btn:active{transform:translateY(1px)}
+  .btn:disabled{opacity:.45;cursor:default;transform:none}
+  .btn.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+  .btn.primary:hover{filter:brightness(1.07)}
+  .btn.upload{border-style:dashed;color:var(--accent);background:transparent}
+  [data-theme="light"] .btn.upload{color:var(--accent)}
+  .upload-status{font:500 12.5px/1.5 var(--font-mono);color:var(--muted);align-self:center;min-width:200px}
+  .upload-status.err{color:var(--bad)}
+  .bar-track{width:150px;height:4px;border-radius:2px;background:var(--inset);overflow:hidden;margin-top:7px}
+  .bar-track>i{display:block;height:100%;width:40%;border-radius:2px;background:var(--accent);
+    animation:scan 1.4s ease-in-out infinite alternate}
+  @keyframes scan{from{transform:translateX(-60%)}to{transform:translateX(190%)}}
+
+  /* ---------- main / stats ---------- */
+  main{max-width:1120px;margin:0 auto;padding:18px 20px 72px}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:20px}
+  .stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
+    padding:13px 16px}
+  .stat b{display:block;font-size:25px;font-weight:700;letter-spacing:-.02em;line-height:1.1;
+    font-variant-numeric:tabular-nums}
+  .stat span{font:500 11px/1.3 var(--font-mono);text-transform:uppercase;letter-spacing:.07em;color:var(--faint)}
+  .stat.bad b{color:var(--bad)}
+
+  .page-head{display:flex;align-items:baseline;gap:12px;margin:26px 0 14px;flex-wrap:wrap}
+  .page-head h2{font-size:19px;font-weight:650;letter-spacing:-.01em}
+  .page-head .count{font:500 12px/1 var(--font-mono);color:var(--faint)}
+  .livebtn{margin-left:auto}
+
+  /* ---------- error banner ---------- */
+  .fatal{display:flex;gap:12px;align-items:flex-start;background:var(--bad-dim);
+    border:1px solid color-mix(in srgb,var(--bad) 40%,transparent);border-radius:var(--r-m);
+    padding:16px 18px;margin-bottom:18px}
+  .fatal svg{color:var(--bad);margin-top:2px}
+  .fatal b{display:block;font-size:14.5px;margin-bottom:2px}
+  .fatal p{font-size:13px;color:var(--muted)}
+  .fatal .btn{margin-top:10px}
+
+  /* ---------- empty ---------- */
+  .empty{background:var(--surface);border:1px dashed var(--border-strong);border-radius:var(--r-m);
+    text-align:center;padding:64px 24px}
+  .empty .glyph{width:52px;height:52px;margin:0 auto 14px;color:var(--accent-deep)}
+  .empty .glyph svg{width:52px;height:52px;stroke-width:1.4}
+  .empty h3{font-size:19px;font-weight:650;margin-bottom:6px}
+  .empty p{color:var(--muted);font-size:14px;max-width:46ch;margin:0 auto 18px}
+  .empty .trow{justify-content:center}
+
+  /* ---------- skeletons ---------- */
+  .skel{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
+    padding:20px;margin-bottom:16px}
+  .sk{background:var(--surface-2);border-radius:6px;height:12px;margin-bottom:10px;
+    animation:pulse 1.2s ease-in-out infinite alternate}
+  @keyframes pulse{from{opacity:.45}to{opacity:1}}
+
+  /* ---------- incident card ---------- */
+  article.incident{background:var(--surface);border:1px solid var(--border);border-radius:var(--r-m);
+    margin-bottom:18px;overflow:hidden;
+    animation:cardin .5s cubic-bezier(.2,.7,.2,1) both}
+  @keyframes cardin{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  article.incident.distress{border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+  article.incident.focused{box-shadow:var(--shadow);border-color:var(--accent-deep)}
+  .inc-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:15px 20px;
+    border-bottom:1px solid var(--border)}
+  .inc-id{font:500 12px/1 var(--font-mono);color:var(--faint)}
+  .pill{display:inline-flex;align-items:center;gap:6px;font:600 10.5px/1 var(--font-mono);
+    text-transform:uppercase;letter-spacing:.07em;border-radius:999px;padding:5px 10px}
+  .pill svg{width:11px;height:11px;stroke-width:2.2}
+  .p-resolved{background:var(--ok-dim);color:var(--ok)}
+  .p-open,.p-suppressed{background:var(--warn-dim);color:var(--warn)}
+  .p-exhausted{background:var(--bad-dim);color:var(--bad)}
+  .p-cue{background:var(--info-dim);color:var(--info)}
+  .p-distress{background:var(--bad-dim);color:var(--bad)}
+  .p-plain{background:var(--surface-2);color:var(--muted)}
+  .inc-meta{margin-left:auto;display:flex;align-items:center;gap:10px;font:500 11.5px/1 var(--font-mono);
+    color:var(--faint)}
+  .inc-meta .iconbtn{width:30px;height:30px;border-radius:8px}
+  .trace-link{display:inline-flex;align-items:center;gap:6px;color:var(--muted);
+    text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 10px;
+    font:500 11.5px/1 var(--font-mono);transition:color var(--dur),border-color var(--dur)}
+  .trace-link:hover{color:var(--accent);border-color:var(--accent-deep)}
+  .trace-link svg{width:12px;height:12px}
+
+  .fall-banner{display:flex;gap:10px;align-items:flex-start;background:var(--bad-dim);
+    color:var(--bad);padding:11px 20px;border-bottom:1px solid color-mix(in srgb,var(--bad) 30%,transparent);
+    font-size:13px;font-weight:600}
+  .fall-banner svg{flex:none;margin-top:1px}
+
+  .verdict{display:flex;gap:10px;align-items:flex-start;padding:14px 20px;
+    border-bottom:1px solid var(--border);background:var(--surface)}
+  .verdict svg{flex:none;color:var(--accent-deep);margin-top:2px}
+  .verdict p{font-size:14px;color:var(--fg);max-width:88ch}
+  .verdict p b{font-weight:650}
+
+  /* ---------- ladder rail ---------- */
+  .railwrap{padding:18px 20px 8px;border-bottom:1px solid var(--border);background:
+    linear-gradient(color-mix(in srgb,var(--surface-2) 55%,transparent),transparent 70%)}
+  .rail-label{font:600 10.5px/1 var(--font-mono);text-transform:uppercase;letter-spacing:.09em;
+    color:var(--faint);margin-bottom:12px;display:flex;gap:10px;align-items:center}
+  .rail-label .planflag{font-weight:400;text-transform:none;letter-spacing:0;color:var(--faint)}
+  .rail{display:flex;align-items:stretch;gap:0;overflow-x:auto;padding-bottom:12px;
+    scrollbar-width:thin}
+  .node{flex:1 0 0;min-width:108px;position:relative;padding:0 14px 0 0}
+  .node:last-child{padding-right:0;min-width:96px}
+  .node .card{position:relative;z-index:1;background:var(--surface);border:1px solid var(--border);
+    border-radius:var(--r-s);padding:10px 12px;height:100%;
+    transition:border-color var(--dur)}
+  .node::before{content:"";position:absolute;top:50%;left:0;width:100%;height:2px;
+    background:var(--border-strong);z-index:0}
+  .node:first-child::before{left:50%;width:50%}
+  .node:last-child::before{width:50%}
+  .node.cue .card,.node.outcome .card{border-style:dashed}
+  .node .top{display:flex;align-items:center;gap:8px;margin-bottom:5px}
+  .node .top svg{width:15px;height:15px;stroke-width:1.7;flex:none}
+  .node .name{font:600 12px/1.2 var(--font-mono);letter-spacing:.01em}
+  .node .sub{font-size:11.5px;color:var(--muted);line-height:1.35;min-height:16px}
+  .node .st{display:inline-flex;align-items:center;gap:5px;font:600 9.5px/1 var(--font-mono);
+    text-transform:uppercase;letter-spacing:.08em;border-radius:5px;padding:3px 7px;margin-top:7px}
+  .node .st svg{width:10px;height:10px;stroke-width:2.4}
+  .node.done .card{border-color:color-mix(in srgb,var(--info) 34%,transparent)}
+  .node.done .st{background:var(--info-dim);color:var(--info)}
+  .node.done .top svg{color:var(--info)}
+  .node.cleared .card{border-color:color-mix(in srgb,var(--ok) 50%,transparent);
+    background:color-mix(in srgb,var(--ok-dim) 55%,var(--surface))}
+  .node.cleared .st{background:var(--ok-dim);color:var(--ok)}
+  .node.cleared .top svg{color:var(--ok)}
+  .node.skipped::before{background:repeating-linear-gradient(90deg,var(--warn) 0 6px,transparent 6px 12px);
+    opacity:.5}
+  .node.skipped .card{border-style:dashed;border-color:color-mix(in srgb,var(--warn) 40%,transparent)}
+  .node.skipped .name{color:var(--muted)}
+  .node.skipped .st{background:var(--warn-dim);color:var(--warn)}
+  .node.skipped .top svg{color:var(--warn)}
+  .node.noanswer .card{border-color:color-mix(in srgb,var(--bad) 40%,transparent)}
+  .node.noanswer .st{background:var(--bad-dim);color:var(--bad)}
+  .node.noanswer .top svg{color:var(--bad)}
+  .node.blocked .card{border-color:color-mix(in srgb,var(--bad) 55%,transparent);
+    background:var(--bad-dim)}
+  .node.blocked .st{background:var(--bad-dim);color:var(--bad)}
+  .node.blocked .top svg{color:var(--bad)}
+  .node.idle .card{opacity:.45}
+  .node.idle .st{background:var(--surface-2);color:var(--faint)}
+  .node.cue .card{border-color:color-mix(in srgb,var(--accent-deep) 60%,transparent)}
+  .node.cue .name{color:var(--accent)}
+  .node.cue .top svg{color:var(--accent)}
+  .node.out-resolved .card{border-color:color-mix(in srgb,var(--ok) 55%,transparent);
+    background:var(--ok-dim)}
+  .node.out-resolved .name{color:var(--ok)}
+  .node.out-resolved .top svg{color:var(--ok)}
+  .node.out-exhausted .card,.node.out-open .card{border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+  .node.out-exhausted .name,.node.out-open .name{color:var(--bad)}
+  .node.out-suppressed .card{border-color:color-mix(in srgb,var(--warn) 45%,transparent);background:var(--warn-dim)}
+  .node.out-suppressed .name{color:var(--warn)}
+  .rail-note{font-size:11.5px;color:var(--faint);padding:0 20px 14px;font-family:var(--font-mono)}
+  .rail-empty{font-size:13px;color:var(--muted);padding:4px 0 14px}
+
+  /* ---------- dossier grid ---------- */
+  .dossier{display:grid;grid-template-columns:1.25fr .9fr;gap:0}
+  .clipsec{padding:16px 20px;border-bottom:1px solid var(--border)}
+  .telem{padding:16px 20px;border-bottom:1px solid var(--border);border-left:1px solid var(--border);
+    background:color-mix(in srgb,var(--surface-2) 40%,transparent)}
+  .sec-title{display:flex;align-items:center;gap:8px;font:600 10.5px/1 var(--font-mono);
+    text-transform:uppercase;letter-spacing:.09em;color:var(--faint);margin-bottom:10px}
+  .sec-title svg{width:13px;height:13px}
+  .strip{position:relative;background:var(--inset);border:1px solid var(--border);
+    border-radius:var(--r-s);overflow:hidden;min-height:170px;display:flex;
+    align-items:center;justify-content:center}
+  .strip img{display:block;width:100%;max-height:260px;object-fit:contain}
+  .clip-ctrl{display:flex;align-items:center;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .clip-ctrl .pos{font:500 12px/1 var(--font-mono);color:var(--muted);min-width:52px;
+    text-align:center;font-variant-numeric:tabular-nums}
+  .clip-note{font-size:11.5px;color:var(--faint);margin-top:8px;max-width:70ch}
+  .kv{display:grid;grid-template-columns:auto 1fr;gap:5px 14px;font-size:12px}
+  .kv dt{font-family:var(--font-mono);color:var(--faint);white-space:nowrap}
+  .kv dd{font-family:var(--font-mono);color:var(--fg);overflow-wrap:anywhere}
+  .tags{display:flex;gap:6px;flex-wrap:wrap}
+  .tag{font:500 10.5px/1 var(--font-mono);border:1px solid var(--border-strong);
+    color:var(--muted);border-radius:6px;padding:4px 8px}
+  .tag.hot{border-color:color-mix(in srgb,var(--bad) 45%,transparent);color:var(--bad);
+    background:var(--bad-dim)}
+
+  /* ---------- timeline ---------- */
+  .tl-wrap{padding:6px 0 10px}
+  .tl-head{display:flex;align-items:center;gap:10px;padding:14px 20px 10px;cursor:pointer;
+    user-select:none;background:none;border:none;width:100%;color:inherit;text-align:left;
+    font-family:inherit}
+  .tl-head:hover .chev{color:var(--fg)}
+  .tl-head .sec-title{margin:0}
+  .tl-head .count{margin-left:auto}
+  .chev{width:14px;height:14px;color:var(--faint);transition:transform .2s}
+  .tl-head[aria-expanded="true"] .chev{transform:rotate(180deg)}
+  ol.timeline{list-style:none;padding:2px 0 8px}
+  ol.timeline li{display:grid;grid-template-columns:170px 1fr;gap:14px;padding:9px 20px;
+    font-size:13.5px;border-top:1px solid color-mix(in srgb,var(--border) 55%,transparent)}
+  .t-what{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .t-ix{font:500 10.5px/1 var(--font-mono);color:var(--faint)}
+  .t-tool{font:600 12px/1.3 var(--font-mono)}
+  .t-rung{font:400 10.5px/1 var(--font-mono);color:var(--faint)}
+  .c-cue{color:var(--accent)} .c-resolve{color:var(--ok)} .c-jump{color:var(--warn)}
+  .c-dial{color:var(--bad)} .c-suppress{color:var(--warn)} .c-emergency{color:var(--bad)}
+  .c-reperceive,.c-speaker_prompt,.c-wait{color:var(--info)}
+  .t-detail{color:var(--muted);font-size:12.5px;overflow-wrap:anywhere}
+  .t-detail .q{color:var(--fg)}
+
+  footer.site{max-width:1120px;margin:0 auto;padding:26px 20px 40px;color:var(--faint);
+    font-size:11.5px;line-height:1.7;border-top:1px solid var(--border)}
+  .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .morebtn{margin:6px auto 0;display:flex}
+
+  @media (max-width:900px){
+    .dossier{grid-template-columns:1fr}
+    .telem{border-left:none;border-top:1px solid var(--border)}
+  }
+  @media (max-width:720px){
+    .stats{grid-template-columns:repeat(2,1fr)}
+    ol.timeline li{grid-template-columns:1fr;gap:3px;padding-left:20px;padding-right:14px}
+    .node{min-width:132px}
+    .inc-meta{margin-left:0;width:100%}
+    .upload-status{min-width:0}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation:none!important;transition:none!important}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to incidents</a>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-ladder" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M5 3v18M14 3v18M5 7h9M5 12h9M5 17h9"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M18 6 6 18M6 6l12 12"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v4M12 17h.01"/></symbol>
+    <symbol id="i-eye" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-mic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3 19.5 19.5 0 0 1-6-6 19.8 19.8 0 0 1-3-8.7A2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.13 1 .36 1.9.7 2.8a2 2 0 0 1-.45 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.45c.9.34 1.8.57 2.8.7A2 2 0 0 1 22 16.9Z"/></symbol>
+    <symbol id="i-siren" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M6 19V12a6 6 0 0 1 12 0v7"/><path d="M4 19h16M12 2v2M4.6 5.6 6 7M19.4 5.6 18 7"/></symbol>
+    <symbol id="i-skip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m5 4 10 8-10 8V4ZM19 5v14"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 22s8-3.5 8-10V5l-8-3-8 3v7c0 6.5 8 10 8 10Z"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></symbol>
+    <symbol id="i-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m15 18-6-6 6-6"/></symbol>
+    <symbol id="i-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m9 18 6-6-6-6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m6 4 14 8-14 8V4Z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M8 4v16M16 4v16"/></symbol>
+    <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></symbol>
+    <symbol id="i-code" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="m16 18 6-6-6-6M8 6l-6 6 6 6"/></symbol>
+    <symbol id="i-cue" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M2 12s3.5-7 10-7c4.5 0 7.5 3 9 5.2"/><path d="M6 8.5C4.2 10 3 12 3 12"/><circle cx="17" cy="17" r="4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 12a9 9 0 1 1-2.6-6.4M21 3v6h-6"/></symbol>
+  </defs>
+</svg>
+
+<header class="appbar">
+  <div class="bar">
+    <div class="brand">
+      <div class="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-ladder"/></svg></div>
+      <div>
+        <h1>Care Ladder</h1>
+        <div class="sub">Caregiver console · demo household</div>
+      </div>
+    </div>
+    <div class="bar-right">
+      <span class="chip" id="learning-badge" hidden><span class="dot" aria-hidden="true"></span> <span id="learning-badge-text">Learning schedule</span></span>
+      <span class="chip"><span class="dot" aria-hidden="true"></span> demo · reserved phones · emergency fail-closed</span>
+      <button class="iconbtn" id="theme-toggle" type="button" aria-label="Switch color theme" title="Switch theme">
+        <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-sun" id="theme-icon"/></svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<div class="consolebar">
+  <section class="panel" aria-label="Demo triggers">
+    <div class="triggers">
+      <div class="tgroup">
+        <span>Guided demo</span>
+        <div class="trow">
+          <button class="btn primary" data-fixture="no_movement_ok" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-check"/></svg>
+            Path A · verbal OK</button>
+          <button class="btn primary" data-fixture="no_movement_silence" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-mic"/></svg>
+            Path B · silence escalates</button>
+          <button class="btn" data-fixture="quiet_hours_suppressed" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-moon"/></svg>
+            Quiet hours · suppressed</button>
+        </div>
+      </div>
+      <div class="tgroup">
+        <span>OpenCV 5 vision paths</span>
+        <div class="trow">
+          <button class="btn" data-fixture="opencv_dnn_person" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>
+            Person DNN · real photo</button>
+          <button class="btn" data-fixture="opencv_pose_person" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-cue"/></svg>
+            Pose chain · real photo</button>
+          <button class="btn" data-fixture="opencv_stillness" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-clock"/></svg>
+            Stillness cue</button>
+          <button class="btn" data-fixture="no_visibility" type="button">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-eye"/></svg>
+            Person left zone</button>
+        </div>
+      </div>
+      <div class="tgroup">
+        <span>Real footage</span>
+        <div class="trow">
+          <label class="btn upload">
+            <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><use href="#i-upload"/></svg>
+            Upload clip
+            <input type="file" id="clip-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/webm" hidden>
+          </label>
+        </div>
+        <span class="upload-status" id="upload-status" aria-live="polite"></span>
+      </div>
+      <div class="tgroup">
+        <span>Live camera</span>
+        <div class="trow">
+          <button class="btn" id="cam-start" type="button">Start camera</button>
+          <button class="btn" id="cam-stop" type="button" hidden>Stop camera</button>
+        </div>
+        <span class="upload-status" id="cam-status" aria-live="polite"></span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<main id="main">
+  <p class="sr" role="status" aria-live="polite" id="announcer"></p>
+
+  <div class="stats" id="stats" hidden>
+    <div class="stat"><b id="s-total">0</b><span>Incidents</span></div>
+    <div class="stat"><b id="s-resolved">0</b><span>Resolved</span></div>
+    <div class="stat"><b id="s-open">0</b><span>Open</span></div>
+    <div class="stat bad"><b id="s-esc">0</b><span>Escalated to dial</span></div>
+  </div>
+
+  <div id="fatal" hidden></div>
+  <div id="incidents"></div>
+</main>
+
+<footer class="site">
+  Not a medical device · no real telephony (reserved NANP fiction) · emergency fail-closed ·
+  frames privacy-transformed (blur/silhouette) before persist · person tracking uses shape geometry only, never identity.
+</footer>
+
+<script>
+"use strict";
+/* ------------------------------------------------------------------ *
+ * Care Ladder console v2 - same API contract as v1:
+ *   GET  /incidents                     list (summaries)
+ *   GET  /incidents/{id}                full audit timeline
+ *   GET  /incidents/{id}/frames         frame metadata
+ *   POST /demo/run                      run a fixture
+ *   POST /demo/upload + GET /demo/upload/{job}   async clip analysis
+ * Optional (see improvement plan): GET /plan → full care-plan rungs.
+ * ------------------------------------------------------------------ */
+
+const TOOL_META = {
+  cue:            {icon:"i-cue",    label:"OpenCV cue"},
+  reperceive:     {icon:"i-eye",    label:"Re-perceive"},
+  speaker_prompt: {icon:"i-mic",    label:"Spoken check-in"},
+  wait:           {icon:"i-clock",  label:"Listen window"},
+  jump:           {icon:"i-skip",   label:"Jump (logged)"},
+  dial_contact:   {icon:"i-phone",  label:"Dial"},
+  emergency:      {icon:"i-siren",  label:"Emergency"},
+  notify:         {icon:"i-phone",  label:"Notify"},
+  resolve:        {icon:"i-check",  label:"Resolve"},
+  suppress:       {icon:"i-moon",   label:"Quiet hours"},
+};
+const CUE_LABEL = {
+  no_movement: "Stillness in zone",
+  no_visibility: "Person left zone",
+  distress_heuristic: "Fall signature (sudden vertical-to-horizontal)",
+};
+const RENDER_LIMIT = 12;
+
+const $ = (s)=>document.querySelector(s);
+const state = { plan:null, seen:new Set(), uploading:false, expanded:new Set(), limit:RENDER_LIMIT };
+// default the timeline open on the newest incident and on distress/exhausted ones
+function defaultOpen(inc){ return inc.cue.kind==="distress_heuristic" || inc.status==="exhausted"; }
+
+function esc(s){const d=document.createElement("div");d.textContent=s??"";return d.innerHTML.replace(/"/g,"&quot;");}
+function icon(id,cls){return `<svg class="${cls||"ic"}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><use href="#${id}"/></svg>`;}
+
+/* ---------- theme ---------- */
+(function initTheme(){
+  const saved = localStorage.getItem("cl-theme");
+  if (saved) document.documentElement.dataset.theme = saved;
+  const setIcon = ()=> $("#theme-icon").setAttribute("href",
+    document.documentElement.dataset.theme === "dark" ? "#i-sun" : "#i-moon");
+  setIcon();
+  $("#theme-toggle").addEventListener("click", ()=>{
+    const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = next;
+    localStorage.setItem("cl-theme", next);
+    setIcon();
+  });
+})();
+
+/* ---------- fetch helpers ---------- */
+async function jfetch(url){
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+  return r.json();
+}
+async function loadFrames(id){
+  try{ return await jfetch(`/incidents/${id}/frames`); }catch{ return null; }
+}
+async function loadPlan(){
+  if (state.plan !== null) return state.plan;
+  try{ state.plan = await jfetch("/plan"); }catch{ state.plan = false; }
+  return state.plan;
+}
+
+/* ---------- "why" verdict ---------- */
+function verdict(inc){
+  const bits = [];
+  if (inc.status === "suppressed"){
+    const d = inc.events.find(e=>e.tool==="suppress")?.detail || {};
+    return `Quiet-hours policy (<b>${esc(d.quiet_hours_start||"22:00")}-${esc(d.quiet_hours_end||"07:00")}</b>) suppressed this non-distress cue. Suppression is recorded, not dropped; distress cues always run.`;
+  }
+  if (inc.cue.kind === "distress_heuristic")
+    bits.push("Fall signature detected");
+  else
+    bits.push(CUE_LABEL[inc.cue.kind] || inc.cue.kind);
+
+  const sp = inc.events.find(e=>e.tool==="speaker_prompt");
+  if (sp){
+    const k = sp.detail?.reply_kind;
+    if (k === "ok") bits.push(`verbal “${esc(sp.detail.reply_raw||"I’m fine")}” at check-in`);
+    else if (k === "call_caregiver") bits.push("asked to call the caregiver");
+    else bits.push("no reply in the listen window");
+  }
+  for (const d of inc.events.filter(e=>e.tool==="dial_contact")){
+    const who = d.detail?.contact || "contact";
+    bits.push(d.detail?.status === "answered"
+      ? `${esc(who)} answered`
+      : `${esc(who)} did not answer`);
+  }
+  const jumps = inc.events.filter(e=>e.tool==="jump").length;
+  if (jumps) bits.push(`${jumps} rung${jumps>1?"s":""} skipped (logged with reason)`);
+
+  if (inc.status === "resolved") bits.push("<b>resolved without emergency escalation</b>");
+  else if (inc.status === "exhausted") bits.push("<b>ladder exhausted - emergency stayed fail-closed</b>");
+  else bits.push(`<b>${esc(inc.status)}</b>`);
+  return bits.join(" → ");
+}
+
+/* ---------- ladder rail ---------- */
+function rungNode(id, tool, detail){
+  const t = TOOL_META[tool] || {icon:"i-code", label:tool};
+  let name = t.label, sub = "";
+  if (tool === "dial_contact"){
+    name = `Dial ${detail?.contact || "contact"}`;
+    const ph = detail?.phone_e164 || "";
+    sub = ph ? ph.replace(/^\+1(\d{3})(\d{3})(\d{4})$/, "+1 $1 $2 $3") : "";
+  } else if (tool === "speaker_prompt"){
+    sub = "Nest/Alexa-style";
+  } else if (tool === "wait"){
+    sub = detail?.sec != null ? `${detail.sec}s` : "";
+  } else if (tool === "reperceive"){
+    sub = "confirm the cue";
+  } else if (tool === "emergency"){
+    sub = "fail-closed";
+  }
+  return {id, tool, name, sub, icon:t.icon, state:"done", detail};
+}
+
+function buildRail(inc){
+  // walk events in order; record first-seen rungs and their state
+  const byId = new Map();
+  const order = [];
+  let lastRungId = null;
+  for (const ev of inc.events){
+    if (ev.tool === "cue") continue;
+    if (ev.tool === "resolve"){ lastRungId && byId.get(lastRungId) && (byId.get(lastRungId).state="cleared"); continue; }
+    if (ev.tool === "suppress") continue;
+    if (ev.tool === "jump"){
+      const rid = ev.detail?.skipped_rung_id;
+      if (rid && !byId.has(rid)){
+        const n = rungNode(rid, ev.detail?.skipped_tool || rid, {});
+        n.state = "skipped"; n.reason = jumpReason(ev.detail);
+        byId.set(rid,n); order.push(rid);
+      }
+      continue;
+    }
+    const rid = ev.rung_id || ev.tool;
+    if (!byId.has(rid)){
+      const n = rungNode(rid, ev.tool, ev.detail);
+      byId.set(rid,n); order.push(rid);
+    } else if (ev.tool !== "jump"){
+      byId.get(rid).detail = ev.detail;
+    }
+    lastRungId = rid;
+    if (ev.tool === "dial_contact" && ev.detail?.status === "no_answer")
+      byId.get(rid).state = "noanswer";
+    if (ev.tool === "emergency")
+      byId.get(rid).state = "blocked";
+  }
+  // plan-aware ordering + idle rungs when /plan exists
+  const plan = state.plan;
+  let nodes;
+  if (plan && Array.isArray(plan.rungs) && plan.rungs.length){
+    nodes = plan.rungs.map(r=>{
+      const n = byId.get(r.id);
+      if (n) return n;
+      const idle = rungNode(r.id, r.tool, r.params);
+      idle.state = "idle";
+      return idle;
+    });
+    for (const rid of order) if (!nodes.some(n=>n.id===rid)) nodes.push(byId.get(rid));
+  } else {
+    nodes = order.map(rid=>byId.get(rid));
+  }
+  return nodes;
+}
+function jumpReason(d){
+  const r = d?.reason || "skipped";
+  const map = {
+    listen_window_already_consumed:"listen window already used",
+    no_answer_escalation:"no answer → escalate",
+    call_caregiver:"person asked to call",
+    no_answer_fail_closed_or_exhausted:"ladder exhausted",
+    emergency_disabled_fail_closed:"fail-closed (disabled)",
+  };
+  return map[r] || r;
+}
+const STATE_LABEL = {done:"ran", cleared:"cleared", skipped:"skipped", noanswer:"no answer",
+  blocked:"fail-closed", idle:"not reached"};
+const STATE_ICON = {done:"i-check", cleared:"i-check", skipped:"i-skip", noanswer:"i-x",
+  blocked:"i-shield", idle:"i-clock"};
+
+function renderRail(inc){
+  const nodes = buildRail(inc);
+  if (!nodes.length && inc.status !== "suppressed")
+    return `<div class="rail-empty">No audit events recorded for this incident.</div>`;
+  const cueSub = inc.cue.kind === "distress_heuristic" ? "distress · escalates fast"
+    : (inc.cue.detail?.source || "cue detector");
+  const outLabel = {resolved:["i-check","Resolved"], exhausted:["i-alert","Exhausted"],
+    open:["i-clock","Open"], suppressed:["i-moon","Suppressed"]}[inc.status] || ["i-code",inc.status];
+  const cells = [
+    `<div class="node cue"><div class="card"><div class="top">${icon("i-cue")}<span class="name">${esc(CUE_LABEL[inc.cue.kind]||inc.cue.kind)}</span></div><div class="sub">${esc(cueSub)}</div><span class="st">${icon("i-check")}observed</span></div></div>`,
+    ...nodes.map(n=>`<div class="node ${n.state}" title="${n.reason?esc(n.reason):""}"><div class="card">
+      <div class="top">${icon(n.icon)}<span class="name">${esc(n.name)}</span></div>
+      <div class="sub">${n.reason?esc(n.reason):esc(n.sub||"")}</div>
+      <span class="st">${icon(STATE_ICON[n.state]||"i-check")}${STATE_LABEL[n.state]||n.state}</span>
+    </div></div>`),
+    `<div class="node outcome out-${esc(inc.status)}"><div class="card"><div class="top">${icon(outLabel[0])}<span class="name">${esc(outLabel[1])}</span></div><div class="sub">${inc.events.length} audit events</div></div></div>`,
+  ];
+  const planFlag = state.plan ? '<span class="planflag">full care plan</span>'
+    : '<span class="planflag">observed path (add GET /plan for the full ladder)</span>';
+  return `<div class="rail-label">Escalation ladder ${planFlag}</div>
+    <div class="rail" role="list" aria-label="Escalation ladder path">${cells.join("")}</div>`;
+}
+
+/* ---------- telemetry + clip ---------- */
+function telemetry(inc){
+  const d = inc.cue.detail || {};
+  const kv = [];
+  const src = d.source || d.detector;
+  if (src) kv.push(["source", src]);
+  if (d.confidence != null) kv.push(["confidence", d.confidence]);
+  if (d.clip_duration_sec != null) kv.push(["clip", `${d.clip_duration_sec}s @ ${d.clip_fps||"?"}fps`]);
+  if (d.person_count != null) kv.push(["people", d.person_count]);
+  const pose = d.pose;
+  if (pose && typeof pose === "object"){
+    if (pose.pattern) kv.push(["pattern", pose.pattern]);
+    if (pose.torso_angle_deg != null) kv.push(["torso", pose.torso_angle_deg+"°"]);
+    if (pose.hip_y_ratio != null) kv.push(["hip ratio", pose.hip_y_ratio]);
+  }
+  const tags = [];
+  for (const t of d.tracks||[])
+    tags.push(`<span class="tag">track t${t.track_id} · h ${t.height_ratio} · a ${t.aspect}</span>`);
+  for (const e of d.track_events||[])
+    if (e.type==="enter"||e.type==="leave")
+      tags.push(`<span class="tag">${e.type} t${e.track_id} @ ${e.t}s</span>`);
+  const learn = (inc.cue && inc.cue.detail && inc.cue.detail.learning) ? inc.cue.detail.learning : null;
+  const learnLine = learn ? `<div class="push-note" style="margin-top:10px;font-size:12.5px;color:var(--muted)">
+      ${esc(learn.explain || "adaptive timeout active")}
+    </div>` : "";
+  if (!kv.length && !tags.length && !learn) return "";
+  return `<div class="telem">
+    <div class="sec-title">${icon("i-cue")} Vision telemetry</div>
+    <dl class="kv">${kv.map(([k,v])=>`<dt>${esc(k)}</dt><dd>${esc(String(v))}</dd>`).join("")}</dl>
+    ${tags.length?`<div class="tags" style="margin-top:10px">${tags.join("")}</div>`:""}
+    ${learnLine}
+    <img src="/incidents/${esc(inc.id)}/detection_frame" alt="Annotated detection frame for this cue"
+      style="width:100%;border-radius:8px;margin-top:12px;border:1px solid var(--border)"
+      loading="lazy" onerror="this.remove()">
+  </div>`;
+}
+
+function clipHTML(inc, frames){
+  if (!frames || !frames.count) return "";
+  const imgs = frames.frame_urls.map((u,i)=>
+    `<img src="${u}" data-i="${i}" alt="Privacy-transformed pre-event frame ${i+1} of ${frames.count}" ${i?'style="display:none"':''} loading="lazy">`).join("");
+  return `<div class="clipsec">
+    <div class="sec-title">${icon("i-shield")} Pre-event clip · privacy: ${esc(frames.privacy||"?")}</div>
+    <div class="strip" id="strip-${esc(inc.id)}" tabindex="0" role="group"
+      aria-label="Pre-event frames, use left and right arrow keys">${imgs}</div>
+    <div class="clip-ctrl">
+      <button class="btn" data-step="-1" type="button" aria-label="Previous frame">${icon("i-left")}</button>
+      <span class="pos" id="pos-${esc(inc.id)}">1 / ${frames.count}</span>
+      <button class="btn" data-step="1" type="button" aria-label="Next frame">${icon("i-right")}</button>
+      <button class="btn" data-play type="button" aria-label="Play frames">${icon("i-play")} Play</button>
+    </div>
+    <p class="clip-note">Frames shown are the privacy-transformed copies persisted with this incident: blur/silhouette is applied before storage. Raw video never leaves the device path.</p>
+  </div>`;
+}
+
+/* ---------- timeline ---------- */
+function detailText(ev){
+  const d = ev.detail||{}; const b=[];
+  if (d.text) b.push(`“<span class="q">${esc(d.text)}</span>”`);
+  if (d.reply_kind) b.push("reply: "+esc(d.reply_kind)+(d.reply_raw?` (“${esc(d.reply_raw)}”)`:""));
+  if (d.status) b.push("status: "+esc(d.status));
+  if (d.result) b.push("result: "+esc(d.result));
+  if (d.contact) b.push("contact: "+esc(d.contact)+(d.phone_e164?` · ${esc(d.phone_e164)}`:""));
+  if (d.reason) b.push("reason: "+esc(d.reason)+(d.skipped_rung_id?` (skipped ${esc(d.skipped_rung_id)})`:""));
+  if (d.confidence!=null) b.push("confidence: "+d.confidence);
+  if (d.source) b.push("source: "+esc(d.source));
+  if (d.privacy) b.push("privacy: "+esc(d.privacy));
+  if (d.sec!=null && d.slept_sec!=null) b.push(`wait ${d.sec}s (slept ${d.slept_sec}s)`);
+  if (d.note) b.push(esc(d.note));
+  return b.join(" · ");
+}
+function timelineHTML(inc){
+  const rows = inc.events.map((ev,ix)=>`
+    <li>
+      <div class="t-what"><span class="t-ix">#${ix+1}</span>
+        <span class="t-tool c-${esc(ev.tool)}">${esc(TOOL_META[ev.tool]?.label||ev.tool)}</span>
+        <span class="t-rung">${esc(ev.rung_id||"")}</span></div>
+      <div class="t-detail">${detailText(ev)||"&nbsp;"}</div>
+    </li>`).join("");
+  const open = state.expanded.has(inc.id);
+  return `<div class="tl-wrap">
+    <button class="tl-head" type="button" aria-expanded="${open}" data-toggle="${esc(inc.id)}">
+      <span class="sec-title">${icon("i-code")} Audit timeline</span>
+      <span class="count">${inc.events.length} events</span>
+      <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
+    </button>
+    <ol class="timeline" ${open?"":'style="display:none"'}>${rows}</ol>
+  </div>`;
+}
+
+/* ---------- incident card ---------- */
+function renderIncident(inc, frames){
+  const distress = inc.cue.kind === "distress_heuristic";
+  const cuePill = distress
+    ? `<span class="pill p-distress">${icon("i-alert")}fall signature</span>`
+    : `<span class="pill p-cue">${icon("i-cue")}cue: ${esc(inc.cue.kind)}</span>`;
+  return `<article class="incident ${distress?"distress":""}" id="inc-${esc(inc.id)}" data-id="${esc(inc.id)}">
+    <div class="inc-head">
+      <span class="inc-id">${esc(inc.id.slice(0,10))}</span>
+      <span class="pill p-${esc(inc.status)}">${icon(inc.status==="resolved"?"i-check":inc.status==="suppressed"?"i-moon":"i-clock")}${esc(inc.status)}</span>
+      ${cuePill}
+      <span class="inc-meta">
+        <span>household ${esc(inc.household_id)}</span>
+        <a class="trace-link" href="/incidents/${esc(inc.id)}" target="_blank" rel="noopener">${icon("i-code")}raw trace</a>
+        ${inc.acked_by
+          ? `<span class="pill p-resolved" title="Acknowledged by ${esc(inc.acked_by)}">${icon("i-check")}acked</span>`
+          : `<button class="btn" type="button" data-ack="${esc(inc.id)}" title="Confirm you have seen this incident">${icon("i-check")}Acknowledge</button>`}
+        <button class="iconbtn" type="button" data-focus aria-label="Focus this incident" title="Focus">${icon("i-expand")}</button>
+      </span>
+    </div>
+    ${distress?`<div class="fall-banner">${icon("i-alert")}Fall signature detected: sudden vertical-to-horizontal transition; the ladder escalates past the verbal rung.</div>`:""}
+    <div class="verdict">${icon("i-shield")}<p>${verdict(inc)}</p></div>
+    <div class="railwrap">${renderRail(inc)}</div>
+    <div class="dossier">${clipHTML(inc,frames)}${telemetry(inc)}</div>
+    ${timelineHTML(inc)}
+  </article>`;
+}
+
+/* ---------- interactions ---------- */
+function bindCard(root){
+  // frame stepper
+  const strip = root.querySelector(".strip");
+  if (strip){
+    const show = (dir)=>{
+      const imgs=[...strip.querySelectorAll("img")];
+      let cur=imgs.findIndex(i=>i.style.display!=="none"); if(cur<0)cur=0;
+      imgs[cur].style.display="none";
+      cur=Math.min(imgs.length-1,Math.max(0,cur+dir));
+      imgs[cur].style.display="block";
+      root.querySelector(".pos").textContent=`${cur+1} / ${imgs.length}`;
+    };
+    root.querySelectorAll("[data-step]").forEach(b=>b.addEventListener("click",()=>show(Number(b.dataset.step))));
+    strip.addEventListener("keydown",(e)=>{
+      if(e.key==="ArrowLeft"){e.preventDefault();show(-1);}
+      if(e.key==="ArrowRight"){e.preventDefault();show(1);}
+    });
+    const playBtn = root.querySelector("[data-play]");
+    let timer=null;
+    playBtn.addEventListener("click",()=>{
+      if (timer){ clearInterval(timer); timer=null;
+        playBtn.innerHTML=`${icon("i-play")} Play`; playBtn.setAttribute("aria-label","Play frames"); return; }
+      playBtn.innerHTML=`${icon("i-pause")} Pause`; playBtn.setAttribute("aria-label","Pause");
+      timer=setInterval(()=>{ show(1);
+        const pos=root.querySelector(".pos").textContent;
+        if (pos.startsWith(`${root.querySelectorAll(".strip img").length} /`)){ clearInterval(timer); timer=null;
+          playBtn.innerHTML=`${icon("i-play")} Play`; }
+      },750);
+    });
+  }
+  // timeline toggle
+  root.querySelector(".tl-head")?.addEventListener("click",(e)=>{
+    const id=e.currentTarget.dataset.toggle;
+    const ol=root.querySelector("ol.timeline");
+    const expanded=e.currentTarget.getAttribute("aria-expanded")==="true";
+    e.currentTarget.setAttribute("aria-expanded",String(!expanded));
+    ol.style.display=expanded?"none":"";
+    expanded?state.expanded.delete(id):state.expanded.add(id);
+  });
+  // caregiver acknowledge
+  root.querySelector("[data-ack]")?.addEventListener("click",async (e)=>{
+    const btn=e.currentTarget;
+    btn.disabled=true;
+    try{
+      const r=await fetch(`/incidents/${btn.dataset.ack}/ack`,{method:"POST",
+        headers:{"content-type":"application/json"},
+        body:JSON.stringify({contact:"caregiver"})});
+      if(!r.ok){ const b=await r.json().catch(()=>({}));
+        $("#announcer").textContent=`Ack failed: ${b.detail||r.statusText}`; btn.disabled=false; return; }
+      $("#announcer").textContent="Incident acknowledged - recorded in the audit trail.";
+      await refresh();
+    }catch(err){ $("#announcer").textContent=`Ack failed: ${err.message}`; btn.disabled=false; }
+  });
+
+  // focus mode
+  root.querySelector("[data-focus]")?.addEventListener("click",()=>{
+    document.querySelectorAll("article.incident").forEach(a=>a.classList.toggle("focused",a===root));
+    root.scrollIntoViewIfNeeded ? root.scrollIntoViewIfNeeded(false)
+      : window.scrollTo({top:root.offsetTop-80,behavior:"smooth"});
+  });
+}
+
+/* ---------- refresh ---------- */
+function skeleton(n=2){
+  return Array.from({length:n},()=>`<div class="skel" aria-hidden="true">
+    <div class="sk" style="width:38%"></div><div class="sk" style="width:76%"></div>
+    <div class="sk" style="width:60%"></div><div class="sk" style="width:88%"></div></div>`).join("");
+}
+function fatalBox(err){
+  const el=$("#fatal");
+  el.hidden=false;
+  el.innerHTML=`<div class="fatal">${icon("i-alert")}
+    <div><b>Can’t reach the Care Ladder API</b>
+    <p>${esc(err.message||String(err))} - is the demo server running? Try <code>./scripts/run_demo.sh</code>, or the live AWS endpoint.</p>
+    <button class="btn" type="button" id="retry">${icon("i-refresh")} Retry</button></div></div>`;
+  $("#retry").addEventListener("click",()=>{ el.hidden=true; refresh(true); });
+}
+
+async function refresh(force=false){
+  if (state.uploading) return;
+  const el=$("#incidents");
+  if (force){ el.innerHTML=skeleton(); }
+  let list;
+  try{
+    list = await jfetch("/incidents");
+    $("#fatal").hidden=true;
+  }catch(err){ el.innerHTML=""; fatalBox(err); return; }
+  await loadPlan();
+
+  $("#stats").hidden=false;
+  $("#s-total").textContent=list.length;
+  $("#s-resolved").textContent=list.filter(s=>s.status==="resolved").length;
+  $("#s-open").textContent=list.filter(s=>s.status==="open").length;
+
+  if (!list.length){
+    $("#s-esc").textContent="0";
+    el.innerHTML=`<div class="empty">
+      <div class="glyph">${icon("i-ladder","")}</div>
+      <h3>No incidents yet</h3>
+      <p>Run a guided demo path to watch an OpenCV cue walk the escalation ladder:
+      every rung, skip and jump is audited. Or upload a real clip for cloud analysis.</p>
+      <div class="trow">
+        <button class="btn primary" data-fixture="no_movement_ok" type="button">${icon("i-check")}Path A · verbal OK</button>
+        <button class="btn primary" data-fixture="no_movement_silence" type="button">${icon("i-mic")}Path B · silence escalates</button>
+      </div></div>`;
+    bindFixtures(el);
+    return;
+  }
+
+  const shown=[...list].reverse().slice(0,state.limit);
+  shown.forEach((s,ix)=>{ if(ix===0 || defaultOpen(s)) state.expanded.add(s.id); });
+  const details=await Promise.all(shown.map(s=>jfetch(`/incidents/${s.id}`).catch(()=>null)));
+  const framesAll=await Promise.all(shown.map(s=>loadFrames(s.id)));
+  let dialCount=0;
+  for (let i=0;i<shown.length;i++){
+    const d=details[i];
+    if (d && d.events.some(e=>e.tool==="dial_contact")) dialCount++;
+  }
+  $("#s-esc").textContent=dialCount;
+
+  el.innerHTML=shown.map((s,i)=>details[i]?renderIncident(details[i],framesAll[i]):"").join("");
+  el.querySelectorAll("article.incident").forEach(bindCard);
+  if (list.length>state.limit){
+    const b=document.createElement("button");
+    b.className="btn morebtn"; b.type="button";
+    b.textContent=`Show ${Math.min(RENDER_LIMIT,list.length-state.limit)} older incidents`;
+    b.addEventListener("click",()=>{state.limit+=RENDER_LIMIT;refresh();});
+    el.appendChild(b);
+  }
+  // announce + reveal new incidents
+  for (const s of list) if(!state.seen.has(s.id)){
+    state.seen.add(s.id);
+    const node=document.getElementById(`inc-${s.id}`);
+    if (node && force===false && state.seen.size>1 && !document.hidden){
+      node.style.animationDelay="0s";
+      window.scrollTo({top:node.offsetTop-90,behavior:"smooth"});
+      $("#announcer").textContent=`New incident ${s.id.slice(0,8)}: ${s.cue.kind}, ${s.status}.`;
+      // replay the rail: highlight nodes sequentially
+      const nodes=node.querySelectorAll(".rail .node");
+      nodes.forEach((n,ix)=>{ n.style.animation=`cardin .45s cubic-bezier(.2,.7,.2,1) ${ix*90}ms both`; });
+    }
+  }
+}
+
+/* ---------- fixtures + upload ---------- */
+function bindFixtures(scope=document){
+  scope.querySelectorAll("[data-fixture]").forEach(btn=>{
+    if (btn.dataset.bound) return; btn.dataset.bound="1";
+    btn.addEventListener("click",async()=>{
+      btn.disabled=true;
+      const old=btn.innerHTML;
+      btn.innerHTML=`${icon("i-clock")} running…`;
+      try{
+        const r=await fetch("/demo/run",{method:"POST",
+          headers:{"content-type":"application/json"},
+          body:JSON.stringify({fixture:btn.dataset.fixture})});
+        if(!r.ok){ const b=await r.json().catch(()=>({}));
+          $("#announcer").textContent=`Demo failed: ${b.detail||r.statusText}`; return; }
+        await refresh();
+      }catch(e){ $("#announcer").textContent=`Demo failed: ${e.message}`; }
+      finally{ btn.disabled=false; btn.innerHTML=old; }
+    });
+  });
+}
+
+$("#clip-input").addEventListener("change",async ev=>{
+  const file=ev.target.files[0]; if(!file) return;
+  const status=$("#upload-status");
+  status.classList.remove("err");
+  status.textContent=`Uploading ${file.name}…`;
+  state.uploading=true;
+  const t0=Date.now();
+  const tick=setInterval(()=>{
+    const s=Math.floor((Date.now()-t0)/1000);
+    status.textContent=`Analyzing ${file.name} - ${Math.floor(s/60)}:${String(s%60).padStart(2,"0")} elapsed (cloud scan runs async)`;
+  },1000);
+  try{
+    const fd=new FormData(); fd.append("file",file);
+    const r=await fetch("/demo/upload",{method:"POST",body:fd});
+    const body=await r.json();
+    if(!r.ok){ clearInterval(tick); status.classList.add("err");
+      status.textContent=`Upload rejected: ${body.detail||r.statusText}`; return; }
+    const jobId=body.incident_id;
+    for(let i=0;i<600;i++){
+      await new Promise(res=>setTimeout(res,1000));
+      const jr=await fetch(`/demo/upload/${jobId}`);
+      if(!jr.ok){ clearInterval(tick); status.classList.add("err");
+        status.textContent="Analysis job was lost - try again."; return; }
+      const j=await jr.json();
+      if(j.status==="done"){ clearInterval(tick);
+        status.textContent=`Incident ${j.incident_id.slice(0,8)} created from ${file.name}`;
+        state.uploading=false; await refresh(); return; }
+      if(j.status==="error"){ clearInterval(tick); status.classList.add("err");
+        status.textContent=`Analysis failed: ${j.error||"unknown error"}`; state.uploading=false; return; }
+    }
+    clearInterval(tick); status.classList.add("err");
+    status.textContent="Analysis timed out after 10 minutes.";
+  }catch(e){ clearInterval(tick); status.classList.add("err"); status.textContent=`Upload failed: ${e.message}`; }
+  finally{ state.uploading=false; ev.target.value=""; }
+});
+
+document.addEventListener("keydown",(e)=>{
+  if(e.key==="Escape") document.querySelectorAll("article.incident.focused")
+    .forEach(a=>a.classList.remove("focused"));
+});
+
+/* ---------- live camera ---------- */
+async function camPoll(){
+  try{
+    const s=await jfetch("/demo/camera/status");
+    const start=$("#cam-start"), stop=$("#cam-stop"), status=$("#cam-status");
+    if(s.running){
+      start.hidden=true; stop.hidden=false;
+      const last=s.last_cue?` · last cue: ${s.last_cue.kind}`:"";
+      status.textContent=`LIVE ${Math.floor(s.elapsed_sec/60)}:${String(Math.floor(s.elapsed_sec%60)).padStart(2,"0")} / ${Math.floor(s.max_seconds/60)}min · ${s.frames} frames${last}`;
+    } else {
+      start.hidden=false; stop.hidden=true;
+      if(s.error) status.textContent=`camera: ${s.error}`;
+      else if(status.textContent.startsWith("LIVE")) status.textContent="camera stopped";
+    }
+  }catch{ /* endpoint absent pre-deploy; leave controls hidden state as-is */ }
+}
+$("#cam-start").addEventListener("click",async()=>{
+  const status=$("#cam-status");
+  try{
+    const r=await fetch("/demo/camera/start",{method:"POST",
+      headers:{"content-type":"application/json"},body:JSON.stringify({source:0})});
+    const b=await r.json();
+    if(!r.ok){ status.textContent=`camera start failed: ${b.detail||r.statusText}`; return; }
+    status.textContent="camera starting...";
+    $("#announcer").textContent="Live camera session started.";
+  }catch(e){ status.textContent=`camera start failed: ${e.message}`; }
+});
+$("#cam-stop").addEventListener("click",async()=>{
+  try{ await fetch("/demo/camera/stop",{method:"POST"}); }catch{}
+  $("#cam-status").textContent="camera stopped";
+});
+setInterval(camPoll,3000); camPoll();
+
+/* ---------- adaptive schedule learning badge (spec 2026-09-27) ---------- */
+async function refreshLearningBadge(){
+  try{
+    const d = await jfetch("/learning/demo-home-1");
+    const badge = $("#learning-badge"), text = $("#learning-badge-text");
+    badge.hidden = false;
+    if(d.frozen){ text.textContent = "Learning frozen"; badge.dataset.phase = "frozen"; }
+    else if(d.learning_phase === "settled"){ text.textContent = "Schedule settled"; badge.dataset.phase = "settled"; }
+    else { text.textContent = "Learning schedule"; badge.dataset.phase = "rapid"; }
+    badge.title = `stillness timeout ${Math.round(d.effective_no_movement_timeout_sec/60)}m (plan ${Math.round(d.plan_timeout_sec/60)}m) · ${d.confirmed_ok_days}/${d.settled_after_days} OK days`;
+  }catch{ /* endpoint absent: badge stays hidden */ }
+}
+
+bindFixtures();
+refresh(true);
+refreshLearningBadge();
+setInterval(()=>{ if(!document.hidden) refreshLearningBadge(); }, 20000);
+setInterval(()=>{ if(!state.uploading && !document.hidden) refresh(); },20000);
+</script>
+</body>
+</html>
