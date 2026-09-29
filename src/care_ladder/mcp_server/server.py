@@ -192,16 +192,21 @@ def check_in_prompt(household_id: str, incident_id: str, utterance: str) -> dict
     kind = intent_to_reply_kind(intent, utterance)
     sess = _SESSIONS.get(_session_key(household_id, incident_id))
     if sess is not None:
-        _append_mcp_event(
-            sess,
-            "check_in_prompt",
-            {
-                "reply_raw": utterance,
-                "response_intent": intent,
-                "intent_label": intent_label(intent),
-                "reply_kind": kind,
-            },
+        last_chk = next(
+            (e for e in reversed(sess["incident"].events) if e.tool == "alexa_checkin"),
+            None,
         )
+        detail = {
+            "via": "mcp",
+            "reply_raw": utterance,
+            "response_intent": intent,
+            "intent_label": intent_label(intent),
+            "reply_kind": kind,
+        }
+        if last_chk is not None:
+            last_chk.detail = {**last_chk.detail, **detail}
+        else:
+            _append_mcp_event(sess, "alexa_checkin", detail)
     return _with_snapshot(
         {
             "incident_id": incident_id,

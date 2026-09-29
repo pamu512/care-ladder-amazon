@@ -128,6 +128,9 @@ def test_path_a_via_tool_calls_only():
         assert chk["response_intent"] == "clear_ok"
         assert chk["intent_label"] == "Clear OK"
         _assert_session_snapshot(chk, "amazon-demo-1", iid)
+        after_chk = call("get_incident_status", {"household_id": "amazon-demo-1", "incident_id": iid})
+        assert "alexa_checkin" in after_chk["tools"]
+        assert "check_in_prompt" not in after_chk["tools"]
 
         mixed = call("check_in_prompt", {
             "household_id": "amazon-demo-1", "incident_id": iid,

@@ -94,6 +94,23 @@ def test_firetv_flow_path_a_then_ack():
                    for e in inc2["events"])
 
 
+def test_firetv_soft_ok_and_needs_human_keep_intent_and_raw():
+    with TestClient(create_app(store=AuditStore())) as client:
+        html = client.get("/firetv/").text
+        assert html.index("renderTranscript(inc)") < html.index("phase === 'resolved'")
+        for fixture, intent, label in (
+            ("alexa_path_a_soft_ok", "clear_ok", "Clear OK"),
+            ("alexa_path_a_needs_human", "needs_human", "Needs human"),
+        ):
+            r = client.post("/demo/run", json={"fixture": fixture})
+            assert r.status_code == 200
+            inc = client.get(f"/incidents/{r.json()['incident_id']}").json()
+            chk = next(e for e in inc["events"] if e["tool"] == "alexa_checkin")
+            assert chk["detail"]["response_intent"] == intent
+            assert chk["detail"]["intent_label"] == label
+            assert chk["detail"]["reply_raw"]
+
+
 def test_firetv_flow_path_b_occlusion_copy():
     with TestClient(create_app(store=AuditStore())) as client:
         r = client.post("/demo/run", json={"fixture": "alexa_path_b"})

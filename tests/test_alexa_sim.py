@@ -33,6 +33,7 @@ def test_sim_silence_path_tools():
         assert any("start_or_resume_incident" in line for line in log)
         assert any("notify_caretaker" in line for line in log)
         assert any("request_call" in line for line in log)
+        assert any('"resumed": true' in line for line in log)
         assert final.get("status") in {"exhausted", "open"}
         assert any(line.startswith("SESSION ") and "rung=" in line and "status=" in line for line in log)
         iids = [line.split("incident=", 1)[1].split()[0] for line in log if line.startswith("SESSION ")]
