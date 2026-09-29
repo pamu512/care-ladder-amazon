@@ -615,6 +615,7 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
                 tool="notify",
                 cue_kind=incident.cue.kind,
                 detail={"action": "caregiver_ack", "contact": contact, "note": note},
+                at=now,
             )
         )
         application.state.store.save(incident)
