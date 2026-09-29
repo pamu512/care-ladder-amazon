@@ -97,6 +97,21 @@ def test_amazon_plan_not_the_opencv_default():
         assert "speaker_prompt" in tools and "alexa_checkin" not in tools
 
 
+def test_friction_log_covers_demo_video_surfaces():
+    """Rank 4: no pending demo-path surfaces; each surface has the rubric triple."""
+    text = Path("docs/friction-log.md").read_text()
+    assert "Pending surfaces" not in text
+    assert "Fire TV" in text
+    assert "1280×720" in text or "1280x720" in text
+    assert "local-only MCP" in text
+    assert "CloudFront" in text
+    assert "uvicorn" in text.lower() or "FastAPI mount" in text
+    # rubric fields appear for the filled surfaces (not just the intro)
+    assert text.lower().count("severity") >= 4
+    assert text.lower().count("workaround") >= 4
+    assert text.lower().count("suggestion") >= 4
+
+
 def test_amazon_demo_path_script_is_the_one_story():
     text = Path("scripts/amazon_demo_path.sh").read_text()
     assert "don't worry" in text
