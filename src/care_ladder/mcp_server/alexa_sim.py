@@ -42,11 +42,39 @@ async def _call(session: ClientSession, name: str, args: dict, log: list[str]) -
     return payload
 
 
+async def _maybe_caregiver(
+    session: ClientSession,
+    hh: str,
+    iid: str,
+    caregiver_answer: str,
+    caregiver_outcome: str,
+    log: list[str],
+) -> dict | None:
+    if not caregiver_answer:
+        return None
+    ack = await _call(
+        session,
+        "caregiver_ack",
+        {"household_id": hh, "incident_id": iid, "utterance": caregiver_answer},
+        log,
+    )
+    if not ack.get("acked"):
+        return None
+    return await _call(
+        session,
+        "caregiver_outcome",
+        {"household_id": hh, "incident_id": iid, "text": caregiver_outcome},
+        log,
+    )
+
+
 async def run_sim(
     base_url: str = "http://127.0.0.1:8000",
     *,
     cue_kind: str = "no_movement",
     answer: str = "",
+    caregiver_answer: str = "",
+    caregiver_outcome: str = "Called Mom, she's fine",
     verbose: bool = True,
 ) -> tuple[list[str], dict]:
     """Drive one incident through the MCP tools; return (transcript, final state)."""
@@ -102,6 +130,11 @@ async def run_sim(
                         {"household_id": hh, "incident_id": iid},
                         log,
                     )
+                    cared = await _maybe_caregiver(
+                        session, hh, iid, caregiver_answer, caregiver_outcome, log
+                    )
+                    if cared is not None:
+                        return log, cared
                     status = await _call(
                         session,
                         "get_incident_status",
@@ -111,11 +144,16 @@ async def run_sim(
                     return log, status
                 # unclear: same as no clear answer — fall through to notify
 
-            # silence path: wait window closes -> notify -> offer call
+            # silence path: wait window closes -> notify -> caregiver ack or call
             status = await _call(
                 session, "get_incident_status", {"household_id": hh, "incident_id": iid}, log
             )
             await _call(session, "notify_caretaker", {"household_id": hh, "incident_id": iid}, log)
+            cared = await _maybe_caregiver(
+                session, hh, iid, caregiver_answer, caregiver_outcome, log
+            )
+            if cared is not None:
+                return log, cared
             call = await _call(
                 session, "request_call", {"household_id": hh, "incident_id": iid}, log
             )
@@ -131,8 +169,20 @@ def main() -> int:
     parser.add_argument("--cue", default="no_movement",
                         choices=["no_movement", "no_visibility", "distress_heuristic"])
     parser.add_argument("--answer", default="", help="Resident scripted utterance ('' = silence)")
+    parser.add_argument(
+        "--caregiver-answer",
+        default="",
+        help="Caregiver Alexa mobile utterance after notify ('' = skip; then request_call)",
+    )
     args = parser.parse_args()
-    log, final = asyncio.run(run_sim(args.url, cue_kind=args.cue, answer=args.answer))
+    log, final = asyncio.run(
+        run_sim(
+            args.url,
+            cue_kind=args.cue,
+            answer=args.answer,
+            caregiver_answer=args.caregiver_answer,
+        )
+    )
     print("---")
     print(f"final: {json.dumps(final)[:200]}")
     return 0

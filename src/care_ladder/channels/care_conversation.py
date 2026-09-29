@@ -145,6 +145,8 @@ class CareConversation:
     ) -> CareState:
         if self.escalation_stopped or self.state == "closed":
             return self.state
+        if self.state in _PAGEABLE:
+            return self.state
         self.inform_card = inform_card(
             blurred_frame_ref,
             cue_text,
@@ -230,3 +232,45 @@ class CareConversation:
                 at=datetime.now(timezone.utc),
             )
         )
+
+
+def ensure_family_paged(
+    household_id: str,
+    *,
+    incident_id: str,
+    cue_kind: str,
+    reason: str,
+    blurred_frame_ref: str,
+    cue_text: str,
+    countdown_sec: int = 180,
+    next_contact: str = "Secondary contact",
+) -> CareConversation:
+    """Open or join the household thread and page Alexa mobile if needed."""
+    conv = CareConversation.for_household(household_id, next_contact=next_contact)
+    if conv.state == "idle":
+        conv.start_speaker(
+            incident_id=incident_id, cue_kind=cue_kind, cue_text=cue_text
+        )
+    if conv.state == "speaker_window":
+        conv.expire_to_family_paged(
+            reason=reason,
+            blurred_frame_ref=blurred_frame_ref,
+            cue_text=cue_text,
+            countdown_sec=countdown_sec,
+        )
+    return conv
+
+
+def close_resident_ok(
+    household_id: str,
+    *,
+    incident_id: str,
+    cue_kind: str,
+    raw: str = "",
+) -> CareConversation:
+    """Resident clear_ok closes the thread without paging family."""
+    conv = CareConversation.for_household(household_id)
+    if conv.state == "idle":
+        conv.start_speaker(incident_id=incident_id, cue_kind=cue_kind)
+    conv.close_from_speaker(reason="clear_ok", raw=raw)
+    return conv

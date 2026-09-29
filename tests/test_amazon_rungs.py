@@ -109,7 +109,11 @@ def test_silence_advances_to_notify_then_call(plan):
     assert "notify_caretaker" in tools and "request_call" in tools
     notify = next(e for e in inc.events if e.tool == "notify_caretaker")
     assert notify.detail["basis"] == "no_response_escalation"
-    assert notify.detail["channels"] == ["push_mock", "fire_tv"]
+    assert notify.detail["channels"] == ["alexa_mobile"]
+    assert notify.detail["surface"] == "alexa_mobile"
+    assert notify.detail["fsm_state"] == "family_paged"
+    assert notify.detail["inform_card"]["countdown_sec"] == 180
+    assert len(notify.detail["inform_card"]["actions"]) == 3
     call = next(e for e in inc.events if e.tool == "request_call")
     assert call.detail["simulated"] is True
     assert call.detail["phone_e164"] == "+12125550176"

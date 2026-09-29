@@ -16,6 +16,8 @@ EXPECTED_TOOLS = {
     "get_incident_status",
     "notify_caretaker",
     "request_call",
+    "caregiver_ack",
+    "caregiver_outcome",
 }
 
 
