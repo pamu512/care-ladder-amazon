@@ -222,7 +222,7 @@ def test_firetv_agent_path_meta_default_hidden_ink40():
 
 
 def test_firetv_agent_tools_toggle_default_hidden_matches_tools_list():
-    """Demo console Show agent tools is off; expand lists the seven MCP names."""
+    """Demo console Show agent tools is off; expand lists the MCP tool names."""
     with TestClient(create_app(store=AuditStore())) as client:
         html = client.get("/firetv/").text
         assert "Show agent tools" in html
@@ -238,7 +238,7 @@ def test_firetv_agent_tools_toggle_default_hidden_matches_tools_list():
         assert "jsonrpc" not in hero.lower()
 
         names = _tools_list_names(client)
-        assert len(names) == 7, names
+        assert len(names) == 9, names
         for name in names:
             assert name in console, name
             assert name not in hero, name

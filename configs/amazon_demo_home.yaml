@@ -40,8 +40,9 @@ rungs:
   - id: notify_caretaker
     tool: notify_caretaker
     params:
-      channels: [push_mock, fire_tv]
+      channels: [alexa_mobile]
       role: caregiver
+      countdown_sec: 180
   - id: request_call
     tool: request_call
     params:

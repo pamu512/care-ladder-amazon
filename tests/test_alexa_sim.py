@@ -128,3 +128,53 @@ def test_sim_soft_ok_resumes_same_incident():
     finally:
         server.should_exit = True
         thread.join(timeout=5)
+
+
+def test_sim_caregiver_im_on_it_skips_call_and_closes():
+    config = uvicorn.Config(
+        create_app(store=AuditStore()), host="127.0.0.1", port=8794, log_level="error"
+    )
+    server = uvicorn.Server(config)
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    for _ in range(50):
+        try:
+            urllib.request.urlopen("http://127.0.0.1:8794/plan", timeout=1)
+            break
+        except Exception:
+            time.sleep(0.2)
+    try:
+        log, final = asyncio.run(
+            run_sim(
+                "http://127.0.0.1:8794",
+                cue_kind="no_movement",
+                answer="",
+                caregiver_answer="I'm on it",
+                caregiver_outcome="Called Mom, she's fine",
+                verbose=False,
+            )
+        )
+        assert any("notify_caretaker" in line for line in log)
+        assert any("caregiver_ack" in line for line in log)
+        assert any("caregiver_outcome" in line for line in log)
+        assert not any("request_call" in line for line in log)
+        assert final.get("status") == "resolved"
+        assert final.get("documentation") == "Called Mom, she's fine"
+        listing = json.loads(
+            urllib.request.urlopen("http://127.0.0.1:8794/incidents", timeout=2).read()
+        )
+        mine = [i for i in listing if i["household_id"] == "amazon-demo-1"]
+        full = json.loads(
+            urllib.request.urlopen(
+                f"http://127.0.0.1:8794/incidents/{mine[-1]['id']}", timeout=2
+            ).read()
+        )
+        assert full["status"] == "resolved"
+        assert any(
+            e["tool"] == "resolve" and e["detail"].get("documentation") == "Called Mom, she's fine"
+            for e in full["events"]
+        )
+        assert all(e.get("at") for e in full["events"])
+    finally:
+        server.should_exit = True
+        thread.join(timeout=5)
