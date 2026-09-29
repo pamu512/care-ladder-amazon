@@ -164,6 +164,7 @@ Do **not** lead with OpenCV DNN eval tables or grant language.
 
 - opencv CI deploys **only** on push to `main` — amazon branch does not burn the live OpenCV demo.  
 - New repo: either (a) no auto-deploy until Anoop wants a separate CloudFront, or (b) duplicate infra with a distinct hostname so OpenCV URL stays stable. Default: **CI = test-only** on care-ladder-amazon until explicitly approved.  
+- Restored: `.github/workflows/ci.yml` is test-only (`pytest`). Parked copy `docs/amazon-split/ci.yml.pending` removed.  
 - Live demo today: `https://d2u7pls4da2poz.cloudfront.net/` — document as “shared demo host from opencv stack” until a dedicated Amazon host exists; do not break OpenCV judges.
 
 ---
