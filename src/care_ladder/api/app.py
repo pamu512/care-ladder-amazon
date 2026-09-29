@@ -25,6 +25,7 @@ from care_ladder.security import (
     bearer_token,
     configured_token,
     mcp_allowed_hosts,
+    redact_phones,
     validate_camera_source,
 )
 from care_ladder.channels.dial import StubDialer
@@ -610,18 +611,7 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
         """Current demo care plan (phone numbers redacted) for the console's
         full-ladder rail: shows never-reached rungs (e.g. emergency fail-closed)."""
         plan = load_care_plan(_DEMO_PLAN_PATH)
-
-        def _redact(phone: str | None) -> str | None:
-            if not phone:
-                return phone
-            return f"****{phone[-2:]}" if len(phone) >= 2 else "****"
-
-        data = plan.model_dump()
-        for key in ("caregiver", "secondary", "monitored"):
-            contact = data.get(key)
-            if contact and contact.get("phone_e164"):
-                contact["phone_e164"] = _redact(contact["phone_e164"])
-        return data
+        return redact_phones(plan.model_dump())
 
     @application.get("/mcp-agent")
     def mcp_agent() -> dict[str, Any]:
@@ -641,7 +631,8 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
         if incident is None:
             raise HTTPException(status_code=404, detail="incident not found")
         # Full timeline JSON: ordered audit events (cue → tools → resolve/jump).
-        return incident.model_dump()
+        # Phones stay in the store; unauthenticated GET never serves them raw.
+        return redact_phones(incident.model_dump())
 
     @application.post("/incidents/{incident_id}/ack")
     def ack_incident(incident_id: str, body: dict[str, Any] | None = None) -> dict[str, Any]:

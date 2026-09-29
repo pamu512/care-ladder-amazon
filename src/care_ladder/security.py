@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import ipaddress
 import os
+import socket
+from typing import Any
 from urllib.parse import urlparse
 
 TOKEN_ENV = "CARE_LADDER_API_TOKEN"
@@ -25,6 +27,7 @@ _METADATA_IPS = frozenset(
         ipaddress.ip_address("169.254.169.254"),
         ipaddress.ip_address("169.254.170.2"),
         ipaddress.ip_address("fd00:ec2::254"),
+        ipaddress.ip_address("100.100.100.200"),
     }
 )
 _DEFAULT_MCP_HOSTS = (
@@ -116,6 +119,42 @@ def _is_metadata_ip(ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
     return ip in _METADATA_IPS
 
 
+def _resolved_ips(host: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    literal = _ip_from_host(host)
+    if literal is not None:
+        return [literal]
+    found: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    try:
+        for info in socket.getaddrinfo(host, None):
+            parsed = _ip_from_host(info[4][0])
+            if parsed is not None:
+                found.append(parsed)
+    except OSError:
+        return []
+    return found
+
+
+def redact_phone(phone: str | None) -> str | None:
+    if not phone:
+        return phone
+    return f"****{phone[-2:]}" if len(phone) >= 2 else "****"
+
+
+def redact_phones(obj: Any) -> Any:
+    """Walk JSON-ish structures and mask every ``phone_e164`` field."""
+    if isinstance(obj, dict):
+        out = {}
+        for key, value in obj.items():
+            if key == "phone_e164" and isinstance(value, str):
+                out[key] = redact_phone(value)
+            else:
+                out[key] = redact_phones(value)
+        return out
+    if isinstance(obj, list):
+        return [redact_phones(item) for item in obj]
+    return obj
+
+
 def validate_camera_source(source: object) -> None:
     """Allow device indices; restrict URL sources to scheme+host allowlist.
 
@@ -141,9 +180,12 @@ def validate_camera_source(source: object) -> None:
     if host in _METADATA_HOSTS:
         raise ValueError("camera URL host is not allowlisted")
 
-    ip = _ip_from_host(host)
-    if ip is not None and _is_metadata_ip(ip):
+    ips = _resolved_ips(host)
+    if _ip_from_host(host) is None and not ips:
+        raise ValueError("camera URL host could not be resolved")
+    if any(_is_metadata_ip(ip) for ip in ips):
         raise ValueError("camera URL host is not allowlisted")
 
-    if host not in camera_allowed_hosts() and (ip is None or str(ip) not in camera_allowed_hosts()):
+    allowed = camera_allowed_hosts()
+    if host not in allowed and not any(str(ip) in allowed for ip in ips):
         raise ValueError("camera URL host is not allowlisted")

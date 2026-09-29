@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 
 from care_ladder.api.app import create_app
@@ -49,6 +51,13 @@ def test_demo_run_and_mcp_require_bearer_when_token_set(monkeypatch):
         mcp_bare = client.post("/mcp", json=_mcp_initialize_body(), headers=_mcp_headers())
         assert mcp_bare.status_code == 401
 
+        wrong = client.post(
+            "/demo/run",
+            json={"fixture": "alexa_path_a_soft_ok"},
+            headers={"Authorization": "Bearer not-the-token"},
+        )
+        assert wrong.status_code == 401
+
         ok = client.post(
             "/demo/run",
             json={"fixture": "alexa_path_a_soft_ok"},
@@ -76,6 +85,26 @@ def test_mutating_routes_fail_closed_without_token_or_local_opt_out(monkeypatch)
         # Read-only surfaces stay up so ALB / Fire TV polls still work.
         assert client.get("/plan").status_code == 200
         assert client.get("/incidents").status_code == 200
+
+
+def test_get_incident_redacts_caregiver_phones(monkeypatch):
+    monkeypatch.setenv("CARE_LADDER_ALLOW_INSECURE_LOCAL", "1")
+    monkeypatch.delenv("CARE_LADDER_API_TOKEN", raising=False)
+
+    with _client() as client:
+        run = client.post("/demo/run", json={"fixture": "no_movement_silence"})
+        assert run.status_code == 200
+        iid = run.json()["incident_id"]
+        inc = client.get(f"/incidents/{iid}").json()
+        dumped = json.dumps(inc)
+        assert "+121255501" not in dumped
+        phones = [
+            ev.get("detail", {}).get("phone_e164")
+            for ev in inc.get("events") or []
+            if ev.get("detail", {}).get("phone_e164")
+        ]
+        assert phones
+        assert all(p.startswith("****") for p in phones)
 
 
 def test_mcp_rejects_foreign_host_when_dns_rebinding_on(monkeypatch):
@@ -110,6 +139,15 @@ def test_validate_camera_source_allows_device_and_localhost_rejects_ssrf():
         except ValueError:
             continue
         raise AssertionError(f"expected reject: {bad}")
+
+
+def test_validate_camera_source_rejects_metadata_even_if_allowlisted(monkeypatch):
+    monkeypatch.setenv("CARE_LADDER_CAMERA_HOSTS", "169.254.169.254,evil.example")
+    try:
+        validate_camera_source("http://169.254.169.254/latest/meta-data/")
+    except ValueError:
+        return
+    raise AssertionError("metadata IP must stay rejected when listed in CAMERA_HOSTS")
 
 
 def test_camera_start_rejects_metadata_url_before_open(monkeypatch):

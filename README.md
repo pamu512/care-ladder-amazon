@@ -92,7 +92,9 @@ curl -s -X POST http://127.0.0.1:8010/demo/run \
 
 MCP Streamable HTTP has DNS-rebinding protection on (`Host` allowlist: localhost / `testserver` plus `CARE_LADDER_MCP_HOSTS` for an ALB hostname).
 
-`POST /demo/camera/start` accepts a device index, or an `rtsp`/`http(s)` URL whose host is `localhost` / `127.0.0.1` / `::1` or listed in `CARE_LADDER_CAMERA_HOSTS`. Cloud metadata IPs and arbitrary remote hosts are rejected.
+`POST /demo/camera/start` accepts a device index, or an `rtsp`/`http(s)` URL whose host is `localhost` / `127.0.0.1` / `::1` or listed in `CARE_LADDER_CAMERA_HOSTS`. Hostnames are resolved; cloud metadata IPs and arbitrary remote hosts are rejected.
+
+Fire TV / console **reads** (`GET /plan`, `GET /incidents`) stay unauthenticated so the dashboard can poll. Fixture buttons, Acknowledge, and camera start/stop need the local opt-out or a bearer the page does not send — hosted token mode is for MCP / `curl`, not the in-page demo console.
 
 ## Privacy & fail-closed
 
