@@ -150,6 +150,51 @@ def test_closed_household_starts_a_new_conversation():
     assert second.incident_id == "inc-2"
 
 
+def test_closed_conversation_evicted_from_registry():
+    CareConversation.reset_registry()
+    conv = CareConversation.for_household("hh-evict")
+    conv.start_speaker(incident_id="inc-1", cue_kind="no_movement")
+    conv.close_from_speaker(reason="clear_ok")
+    assert conv.state == "closed"
+    assert "hh-evict" not in CareConversation._by_household
+
+
+def test_outcome_evicts_household_entry():
+    CareConversation.reset_registry()
+    conv = CareConversation.for_household("hh-out")
+    conv.start_speaker(incident_id="inc-1", cue_kind="no_movement")
+    conv.expire_to_family_paged(
+        reason="silence", blurred_frame_ref="b", cue_text="c", countdown_sec=180
+    )
+    conv.ack("im_on_it", by="Primary contact")
+    conv.record_outcome("Called Mom, she's fine")
+    assert conv.state == "closed"
+    assert "hh-out" not in CareConversation._by_household
+
+
+def test_idle_outcome_is_rejected():
+    conv = CareConversation(household_id="hh-idle")
+    state = conv.record_outcome("premature close")
+    assert state == "idle"
+    assert conv.state == "idle"
+    assert conv.documentation is None
+    assert conv.owner is None
+    assert not any(e.tool == "closed" for e in conv.audit_events())
+
+
+def test_paged_outcome_without_ack_is_rejected():
+    conv = CareConversation(household_id="hh-paged")
+    conv.start_speaker(incident_id="inc-1", cue_kind="no_movement")
+    conv.expire_to_family_paged(
+        reason="silence", blurred_frame_ref="b", cue_text="c", countdown_sec=180
+    )
+    state = conv.record_outcome("no ack yet")
+    assert state == "family_paged"
+    assert conv.state == "family_paged"
+    assert conv.documentation is None
+    assert conv.owner is None
+
+
 def test_ack_actions_match_inform_card_ids():
     assert ACK_ACTIONS == tuple(a["id"] for a in INFORM_ACTIONS)
 

@@ -122,3 +122,29 @@ def test_unclear_ack_does_not_stop_ladder():
 def test_mcp_lists_caregiver_tools():
     assert "caregiver_ack" in EXPECTED_TOOLS
     assert "caregiver_outcome" in EXPECTED_TOOLS
+
+
+def test_caregiver_outcome_rejected_before_ack():
+    CareConversation.reset_registry()
+    with TestClient(create_app(store=AuditStore())) as client:
+        call = _init_and_caller(client)
+        started = call("start_or_resume_incident", {"cue_kind": "no_movement"})
+        iid = started["incident_id"]
+        hh = "amazon-demo-1"
+        out = call(
+            "caregiver_outcome",
+            {"household_id": hh, "incident_id": iid, "text": "too early"},
+        )
+        assert out.get("error") == "outcome_requires_ack"
+        assert out.get("fsm_state") != "closed"
+        inc = client.get(f"/incidents/{iid}").json()
+        assert inc["status"] != "resolved"
+
+        call("notify_caretaker", {"household_id": hh, "incident_id": iid})
+        still_early = call(
+            "caregiver_outcome",
+            {"household_id": hh, "incident_id": iid, "text": "still too early"},
+        )
+        assert still_early.get("error") == "outcome_requires_ack"
+        assert still_early.get("fsm_state") == "family_paged"
+        assert client.get(f"/incidents/{iid}").json()["status"] != "resolved"

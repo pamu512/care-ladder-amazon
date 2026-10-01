@@ -120,10 +120,15 @@ class CareConversation:
         )
         return self.state
 
+    def _evict_if_registered(self) -> None:
+        if type(self)._by_household.get(self.household_id) is self:
+            type(self)._by_household.pop(self.household_id, None)
+
     def close_from_speaker(self, *, reason: str = "clear_ok", raw: str = "") -> CareState:
         if self.state != "speaker_window":
             return self.state
         self.state = "closed"
+        self._evict_if_registered()
         self._append(
             "closed",
             {
@@ -219,8 +224,11 @@ class CareConversation:
     def record_outcome(self, text: str) -> CareState:
         if self.state == "closed":
             return self.state
+        if self.state not in _PAGEABLE or not self.escalation_stopped:
+            return self.state
         self.documentation = text
         self.state = "closed"
+        self._evict_if_registered()
         self._append(
             "closed",
             {

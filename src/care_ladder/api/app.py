@@ -474,10 +474,18 @@ _UPLOAD_JOBS: dict[str, dict[str, Any]] = {}
 
 
 def _is_gated_path(method: str, path: str) -> bool:
-    """MCP + mutating / caregiver-sensitive writes. Read-only polls stay open."""
+    """MCP + mutating / caregiver-sensitive writes + imagery. JSON polls stay open."""
     normalized = path.rstrip("/") or "/"
     if normalized == "/mcp" or normalized.startswith("/mcp/"):
         return True
+    parts = [p for p in normalized.split("/") if p]
+    if method == "GET":
+        # /incidents/{id}/frames/{index} and /incidents/{id}/detection_frame
+        if len(parts) == 4 and parts[0] == "incidents" and parts[2] == "frames":
+            return True
+        if len(parts) == 3 and parts[0] == "incidents" and parts[2] == "detection_frame":
+            return True
+        return False
     if method != "POST":
         return False
     if normalized in {
@@ -487,7 +495,6 @@ def _is_gated_path(method: str, path: str) -> bool:
         "/demo/camera/stop",
     }:
         return True
-    parts = [p for p in normalized.split("/") if p]
     if len(parts) == 3 and parts[0] == "incidents" and parts[2] == "ack":
         return True
     if len(parts) == 3 and parts[0] == "learning" and parts[2] in {"freeze", "reset", "settle"}:
@@ -850,7 +857,7 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
         body = body or {}
         source = body.get("source", 0)
         try:
-            validate_camera_source(source)
+            source = validate_camera_source(source)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 

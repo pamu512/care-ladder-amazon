@@ -517,8 +517,28 @@ def caregiver_outcome(
             household_id,
             incident_id,
         )
-    conv = CareConversation.for_household(household_id)
+    conv = CareConversation._by_household.get(household_id)
+    if conv is None:
+        return _with_snapshot(
+            {
+                "error": "outcome_requires_ack",
+                "incident_id": incident_id,
+                "fsm_state": "idle",
+            },
+            household_id,
+            incident_id,
+        )
     conv.record_outcome(text)
+    if conv.state != "closed":
+        return _with_snapshot(
+            {
+                "error": "outcome_requires_ack",
+                "incident_id": incident_id,
+                "fsm_state": conv.state,
+            },
+            household_id,
+            incident_id,
+        )
     inc.status = "resolved"
     _append_mcp_event(
         sess,

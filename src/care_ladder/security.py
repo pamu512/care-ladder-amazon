@@ -6,7 +6,7 @@ import ipaddress
 import os
 import socket
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 TOKEN_ENV = "CARE_LADDER_API_TOKEN"
 INSECURE_LOCAL_ENV = "CARE_LADDER_ALLOW_INSECURE_LOCAL"
@@ -155,19 +155,44 @@ def redact_phones(obj: Any) -> Any:
     return obj
 
 
-def validate_camera_source(source: object) -> None:
+def _pinned_url(source: str, ip: ipaddress.IPv4Address | ipaddress.IPv6Address) -> str:
+    """Rewrite the URL host to an IP literal so later connect cannot DNS-rebind."""
+    parsed = urlparse(source)
+    host = f"[{ip}]" if isinstance(ip, ipaddress.IPv6Address) else str(ip)
+    userinfo = ""
+    if parsed.username is not None:
+        userinfo = parsed.username
+        if parsed.password is not None:
+            userinfo += f":{parsed.password}"
+        userinfo += "@"
+    port = f":{parsed.port}" if parsed.port is not None else ""
+    return urlunparse(
+        (
+            parsed.scheme,
+            f"{userinfo}{host}{port}",
+            parsed.path,
+            parsed.params,
+            parsed.query,
+            parsed.fragment,
+        )
+    )
+
+
+def validate_camera_source(source: object) -> object:
     """Allow device indices; restrict URL sources to scheme+host allowlist.
 
     Cloud-metadata IPs/hosts are always rejected, even if listed in env.
+    Hostname URLs are rewritten to the resolved IP so VideoCapture cannot
+    rebind DNS between check and connect.
     """
     if isinstance(source, bool):
         raise ValueError("source must be a device index or rtsp/http URL")
     if isinstance(source, int):
         if source < 0:
             raise ValueError("device index must be >= 0")
-        return
+        return source
     if isinstance(source, str) and source.isdigit():
-        return
+        return source
     if not isinstance(source, str):
         raise ValueError("source must be a device index or rtsp/http URL")
 
@@ -189,3 +214,6 @@ def validate_camera_source(source: object) -> None:
     allowed = camera_allowed_hosts()
     if host not in allowed and not any(str(ip) in allowed for ip in ips):
         raise ValueError("camera URL host is not allowlisted")
+    if _ip_from_host(host) is not None or not ips:
+        return source
+    return _pinned_url(source, ips[0])
