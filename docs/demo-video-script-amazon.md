@@ -1,5 +1,8 @@
 # Care Ladder - Amazon Build, Ship, Shape update (in-window)
 
+Shipped remux: [`docs/demo/care-ladder-amazon-demo.mp4`](demo/care-ladder-amazon-demo.mp4)
+(`00:02:33.46`). How to regenerate: [`docs/demo/README.md`](demo/README.md).
+
 Demo video (about 3 min) - English VO, about 135 wpm pacing. Path A (clear OK + needs
 human) then Path B (camera occluded). Before/after framing per PRD section 6.
 
