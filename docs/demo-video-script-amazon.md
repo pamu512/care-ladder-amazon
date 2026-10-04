@@ -1,7 +1,7 @@
 # Care Ladder - Amazon Build, Ship, Shape update (in-window)
 
 Shipped remux: [`docs/demo/care-ladder-amazon-demo.mp4`](demo/care-ladder-amazon-demo.mp4)
-(`00:02:33.46`). How to regenerate: [`docs/demo/README.md`](demo/README.md).
+(`00:02:03.38`). How to regenerate: [`docs/demo/README.md`](demo/README.md).
 
 Demo video (about 3 min) - English VO, about 135 wpm pacing. Path A (clear OK + needs
 human) then Path B (camera occluded). Before/after framing per PRD section 6.
@@ -15,8 +15,11 @@ supporting. Caregiver notify is Alexa mobile. API bearer gates `/mcp`, mutating
 writes, and incident frame image GETs. JSON polls (`GET /plan`, `GET /incidents`)
 stay open. Camera hostname URLs are rewritten to the resolved IP before
 `VideoCapture`. The household FSM entry is evicted on close. Caregiver outcome
-is accepted only after ack; otherwise `outcome_requires_ack`. This branch also
-has a fall/CV training path (see shot 10). It does not claim a trained model.
+is accepted only after acknowledgment; otherwise the tool returns
+`outcome_requires_ack`, which means the outcome requires acknowledgment. This branch also
+has a fall/CV training path. The spoken closer may use one throwaway line:
+we trained on Kaggle datasets. It does not name the slug, weights path, or
+class names, and it does not claim accuracy.
 
 **Device truth:** prefer a Fire TV stick (Silk) or the official simulator in
 frame. Browser at 1280x720 is the fallback if a stick is not available.
@@ -29,11 +32,11 @@ Anoop decides hardware.
 | 3 | 0:20-0:45 | Fire TV dashboard `/firetv/` all-clear state. Arrow keys demonstrate D-pad focus moving between cards | Fire TV is the supporting surface: a calm living-room dashboard. Silhouette only, no live video feed, and a remote-friendly layout that works with just the D-pad. |
 | 4 | 0:45-1:05 | Demo console then "Soft OK · no okay". Transcript shows the resident: "don't worry" plus a **Clear OK** label; hero flips to resolved | When OpenCV sees four minutes of stillness, Alexa+ checks in. Soft reassurance, don't worry, is a clear OK even without the word okay. The ladder stands down. The transcript is the real line plus the intent label. |
 | 5 | 1:05-1:25 | Reset, then "Mixed hurt reply". Transcript quotes "I'm okay but I think I'm hurt" with **Needs human**; hero stays notify, does not resolve | The same check-in does not treat every utterance as binary OK. Okay-but-hurt stays on the TV as needs a human. The ladder does not clear. |
-| 6 | 1:25-1:40 | Click "Acknowledge" then Resolved · acknowledged state, trail stays | A human closes the loop. Caregiver notify lands on Alexa mobile. The acknowledgement is on the audit trail, not a silent read receipt. A caregiver outcome is recorded only after that ack. Otherwise the tool returns outcome_requires_ack. |
+| 6 | 1:25-1:40 | Click "Acknowledge" then Resolved · acknowledged state, trail stays | A human closes the loop. Caregiver notify lands on Alexa mobile. The acknowledgment is on the audit trail, not a silent read receipt. A caregiver outcome is recorded only after that acknowledgment. |
 | 7 | 1:40-2:00 | Demo console then "Path B · camera occluded". Hero shows camera-blocked state; silhouette shows "No reading · lens covered"; the blanket prompt in transcript; notify card says inform, no distress claim | Cover the camera and Care Ladder does not panic. Occlusion reads as privacy, not distress. It asks the resident to move the blanket, and if there is no answer it informs the primary contact on exactly that basis. No distress is ever claimed. |
 | 8 | 2:00-2:20 | Split: Fire TV stays in frame while the terminal runs `alexa_sim` (`--answer "don't worry"`). MCP initialize + tools/call; TV audit/transcript updates on the same incident; calm **MCP agent active** pill while the sim drives, then auto-clears | Under the hood, the Alexa+ path runs on a self-hosted MCP server, Streamable HTTP, current spec, exposing care-flow tools. `/mcp` and writes need a bearer token. JSON polls stay open so the TV can refresh. This simulated Alexa+ agent is an MCP client driving the real ladder. The TV is watching the same incident, not a second demo glued on. |
-| 9 | 2:20-2:40 | Footer of the TV: wellness disclaimer, emergency off; emergency gate modal opened, hold attempted, stays locked | Two things this system will not do: claim to be medical, or call emergency services on its own. Emergency is off by default and hard-locked in this build. Incident frame image GETs are bearer-gated. Camera URLs rewrite the hostname to the resolved IP before VideoCapture. When a conversation closes, the household FSM entry is evicted. |
-| 10 | 2:40-3:00 | Split screen: OpenCV console (before) + Fire TV (after) | Same project, same fail-closed spine. Alexa+ is primary. Fire TV is supporting. Caregiver notify is Alexa mobile. Fall training is a path, not a fitted model: dataset elwalyahmad/fall-detection from the Kaggle fall plus Computer Vision search only. Weights would land at models/fall_classifier.npz and CueDetector.from_plan loads that file when it is present. Training did not run. Kaggle credentials were missing. Care Ladder. |
+| 9 | 2:20-2:40 | Footer of the TV: wellness disclaimer, emergency off; emergency gate modal opened, hold attempted, stays locked. Not spoken (on-screen / notes): bearer-gated frame GETs, hostname rewritten to the resolved IP before VideoCapture, household FSM evicted on close | Two things this system will not do. It will not claim to be medical. And it will not call emergency services on its own. Emergency stays off, and locked, in this build. |
+| 10 | 2:40-3:00 | Split screen: OpenCV console (before) + Fire TV (after). One throwaway training line only. Not spoken: dataset slug, weights path, CueDetector, missing credentials, or "training did not run" | Same project. Alexa+ is primary. Fire TV is supporting. The caregiver is on Alexa mobile. We trained on Kaggle datasets. This is not a medical device. Care Ladder. |
 
 ## Existing run notes (already in this file)
 
@@ -52,9 +55,11 @@ Anoop decides hardware.
 ## Remux / VO timing (existing beat)
 
 Existing VO that described Path A as two silent attempts then "no answer,
-notify Anoop" must be replaced. Keep shots 1 to 3 (0:00-0:45). Shots 8 to 10
-now also name bearer, SSRF pin, FSM eviction, outcome-after-ack, and the
-untrained fall path.
+notify Anoop" must be replaced. Keep shots 1 to 3 (0:00-0:45). Shot 6 says
+acknowledgment, not ack. Shot 9 stays on the medical and emergency lock. Shot 10
+is a short product closer with one throwaway line: we trained on Kaggle datasets.
+Bearer pin, VideoCapture rewrite, FSM eviction, slug, weights path, and
+credentials stay in notes, not in speech.
 
 **Cut out:** old shot 4 to 5 (stillness cue then silence then wait 45s then calling Anoop).
 **Cut in:** new shot 4 (Clear OK / "don't worry", about 20s) then shot 5 (Needs
@@ -76,3 +81,9 @@ Do not keep the old "answered / no speech" beat; it no longer matches the TV.
   show the TV move (resolve / notify + MCP pill) while the sim transcript runs.
 - Do not claim fall-classifier accuracy. Do not show a trained weight file as if
   this run fitted one.
+- Not spoken (true in code, leave off the tape): incident frame image GETs are
+  bearer-gated; camera hostnames rewrite to the resolved IP before VideoCapture;
+  the household FSM entry is evicted on close; fall training is a path only
+  (`elwalyahmad/fall-detection`, `models/fall_classifier.npz`,
+  `CueDetector.from_plan` loads that file when present). Training did not run.
+  Kaggle credentials were missing.

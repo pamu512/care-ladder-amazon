@@ -2,7 +2,7 @@
 
 Shipped artifact: [`docs/demo/care-ladder-amazon-demo.mp4`](care-ladder-amazon-demo.mp4)
 
-- Duration: `00:02:33.46` (153.46s), 1280x720, H.264 + AAC, about 3.2 MB
+- Duration: `00:02:03.38` (123.38s), 1280x720, H.264 + AAC, about 2.6 MB
 - VO source: [`docs/demo-video-script-amazon.md`](../demo-video-script-amazon.md)
 - Method: same remux the OpenCV pack used (live local UI stills + spoken VO, then ffmpeg). Browser at 1280x720 because a Fire TV stick was not available in this environment.
 

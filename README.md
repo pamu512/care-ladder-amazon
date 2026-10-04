@@ -66,7 +66,7 @@ MCP tool calls write the incident into the AuditStore Fire TV polls (`GET /incid
 
 Amazon household: `configs/amazon_demo_home.yaml` (resident + primary/secondary contacts, stillness 4m). `configs/demo_home.yaml` is the legacy OpenCV plan, kept for before/after regression.
 
-Judge remux (2:33, English VO): [`docs/demo/care-ladder-amazon-demo.mp4`](docs/demo/care-ladder-amazon-demo.mp4). Shot list in [`docs/demo-video-script-amazon.md`](docs/demo-video-script-amazon.md). Remux notes: [`docs/demo/README.md`](docs/demo/README.md).
+Judge remux (2:03, English VO): [`docs/demo/care-ladder-amazon-demo.mp4`](docs/demo/care-ladder-amazon-demo.mp4). Shot list in [`docs/demo-video-script-amazon.md`](docs/demo-video-script-amazon.md). Remux notes: [`docs/demo/README.md`](docs/demo/README.md).
 
 ## Demo paths
 
