@@ -118,6 +118,10 @@ Honest tool/SDK notes (bonus): [`docs/friction-log.md`](docs/friction-log.md).
 
 MCP handshake + care-flow tools, Fire TV HTML/API flow, response intent, `alexa_sim` client, and the shared ladder/API spine.
 
+## Fall-frame classifier (optional)
+
+Kaggle download and training: [`docs/fall-cv-training.md`](docs/fall-cv-training.md). Weights land at `models/fall_classifier.npz` (gitignored). `CueDetector.from_plan` loads them when the file exists.
+
 ## Shared demo host (read-only from this repo)
 
 Live HTTPS today: https://d2u7pls4da2poz.cloudfront.net/ — **shared host from the opencv-care-ladder stack**. CI on this repo is **test-only** (no auto-deploy) so OpenCV judges keep a stable CloudFront. Optional AWS replay: [`infra/README.md`](infra/README.md). Local run needs no AWS credentials: `./scripts/run_demo.sh`.

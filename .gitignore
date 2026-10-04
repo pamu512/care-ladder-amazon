@@ -1,4 +1,6 @@
 models/*.onnx
+models/*.npz
+data/kaggle/
 .DS_Store
 .venv/
 __pycache__/

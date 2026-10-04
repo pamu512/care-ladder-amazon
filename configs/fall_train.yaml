@@ -1,0 +1,19 @@
+# Fall-frame classifier. Train only from the Kaggle filter:
+# https://www.kaggle.com/datasets?search=fall&tags=13207-Computer+Vision
+dataset:
+  slug: elwalyahmad/fall-detection
+  page: https://www.kaggle.com/datasets/elwalyahmad/fall-detection
+  filter: https://www.kaggle.com/datasets?search=fall&tags=13207-Computer+Vision
+  why: >
+    Card is on that fall + Computer Vision (tag 13207) search.
+    Roboflow YOLO images with classes Fall Detected and NoFall Detected
+    (47 MB). Not URFD or Le2i.
+  fall_class_ids: [0]
+download_dir: data/kaggle/elwalyahmad-fall-detection
+weights: models/fall_classifier.npz
+train:
+  input_wh: [32, 32]
+  epochs: 25
+  lr: 0.3
+  max_samples: 400
+  threshold: 0.65
