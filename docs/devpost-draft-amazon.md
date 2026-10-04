@@ -73,7 +73,7 @@ Full log: `docs/friction-log.md` (paste-ready block at the bottom). Highlights:
 
 ## Links
 - Repo: https://github.com/pamu512/care-ladder-amazon
-- Demo video: ≤3:00, English (shot list: docs/demo-video-script-amazon.md)
+- Demo video: docs/demo/care-ladder-amazon-demo.mp4 (00:02:03, English). Shot list: docs/demo-video-script-amazon.md. Not a Final Submit.
 - Friction log: docs/friction-log.md
 
 ## Team

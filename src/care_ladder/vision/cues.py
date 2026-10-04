@@ -49,6 +49,8 @@ class CueDetector:
         motion_source: str = "frame_diff",
         tracking_enabled: bool = True,
         pose_model: Any | None = None,
+        fall_classifier: Any | None = None,
+        fall_score_threshold: float = 0.65,
     ) -> None:
         self.no_movement_timeout_sec = float(no_movement_timeout_sec)
         self.zone = np.asarray(zone, dtype=np.float32)
@@ -79,6 +81,9 @@ class CueDetector:
         self.tracking_enabled = tracking_enabled
         self.pose_model = pose_model
         self.pose_state = PoseHeuristics() if pose_model is not None else None
+        self.fall_classifier = fall_classifier
+        self.fall_score_threshold = float(fall_score_threshold)
+        self._trained_fall_since: float | None = None
 
     @classmethod
     def from_plan(
@@ -116,13 +121,17 @@ class CueDetector:
                 timeout = float(
                     effective_no_movement_timeout_sec(plan, profile)
                 )
-        return cls(
+        from care_ladder.vision.fall_train import load_trained_classifier
+
+        det = cls(
             no_movement_timeout_sec=timeout,
             zone=polygon,
             enable_no_movement=bool(plan.triggers.no_movement.enabled),
             enable_no_visibility=bool(plan.triggers.no_visibility.enabled),
             enable_distress_heuristic=bool(plan.triggers.distress_heuristic.enabled),
+            fall_classifier=load_trained_classifier(),
         )
+        return det
 
     def observe(self, frame: np.ndarray, t: float) -> CueEvent | None:
         gray = (
@@ -203,6 +212,7 @@ class CueDetector:
             self._presence_frames = 0
             self._still_since = None
             self._distress_since = None
+            self._trained_fall_since = None
             if self._seen_in_zone and self.enable_no_visibility:
                 # Latch: require re-entry before another no_visibility.
                 self._seen_in_zone = False
@@ -231,6 +241,46 @@ class CueDetector:
                 detail["tracks"] = tr["tracks"]
             self._distress_since = None  # suppress the shape fallback
             return CueEvent(kind="distress_heuristic", confidence=0.85, detail=detail)
+
+        if (
+            self.fall_classifier is not None
+            and self.enable_distress_heuristic
+            and in_zone
+            and blob is not None
+        ):
+            box = (
+                blob["cx"] - blob["w"] / 2.0,
+                blob["cy"] - blob["h"] / 2.0,
+                blob["cx"] + blob["w"] / 2.0,
+                blob["cy"] + blob["h"] / 2.0,
+            )
+            try:
+                score = float(self.fall_classifier.predict_proba(frame, box))
+            except Exception:
+                score = 0.0
+            self.last_fall_score = score
+            if score >= self.fall_score_threshold:
+                if self._trained_fall_since is None:
+                    self._trained_fall_since = t
+                if (t - self._trained_fall_since) >= self.distress_sustain_sec:
+                    self._trained_fall_since = None
+                    detail = {
+                        "non_clinical": True,
+                        "note": "trained fall-frame classifier; not a medical diagnosis",
+                        "source": "trained_fall_classifier",
+                        "score": round(score, 4),
+                    }
+                    if getattr(self, "last_tracking", None):
+                        tr = self.last_tracking
+                        detail["person_count"] = tr["person_count"]
+                        detail["tracks"] = tr["tracks"]
+                    return CueEvent(
+                        kind="distress_heuristic",
+                        confidence=min(0.85, 0.5 + 0.4 * score),
+                        detail=detail,
+                    )
+            else:
+                self._trained_fall_since = None
 
         if (
             self.enable_distress_heuristic

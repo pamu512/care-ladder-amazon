@@ -66,6 +66,8 @@ MCP tool calls write the incident into the AuditStore Fire TV polls (`GET /incid
 
 Amazon household: `configs/amazon_demo_home.yaml` (resident + primary/secondary contacts, stillness 4m). `configs/demo_home.yaml` is the legacy OpenCV plan, kept for before/after regression.
 
+Judge remux (2:03, English VO): [`docs/demo/care-ladder-amazon-demo.mp4`](docs/demo/care-ladder-amazon-demo.mp4). Shot list in [`docs/demo-video-script-amazon.md`](docs/demo-video-script-amazon.md). Remux notes: [`docs/demo/README.md`](docs/demo/README.md).
+
 ## Demo paths
 
 | Path | Fixture | What judges should see |
@@ -117,6 +119,10 @@ Honest tool/SDK notes (bonus): [`docs/friction-log.md`](docs/friction-log.md).
 ```
 
 MCP handshake + care-flow tools, Fire TV HTML/API flow, response intent, `alexa_sim` client, and the shared ladder/API spine.
+
+## Fall-frame classifier (optional)
+
+Kaggle download and training: [`docs/fall-cv-training.md`](docs/fall-cv-training.md). Weights land at `models/fall_classifier.npz` (gitignored). `CueDetector.from_plan` loads them when the file exists.
 
 ## Shared demo host (read-only from this repo)
 

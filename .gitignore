@@ -1,7 +1,11 @@
 models/*.onnx
+models/*.npz
+data/kaggle/
 .DS_Store
 .venv/
 __pycache__/
 *.egg-info/
 clips/*.avi
 clips/meta
+docs/demo/vo/
+docs/demo/frames/
