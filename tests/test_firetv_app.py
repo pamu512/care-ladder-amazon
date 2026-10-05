@@ -250,7 +250,9 @@ def test_firetv_agent_tools_toggle_default_hidden_matches_tools_list():
         assert "jsonrpc" not in hero.lower()
 
         names = _tools_list_names(client)
-        assert len(names) == 9, names
+        from test_mcp_server import EXPECTED_TOOLS
+
+        assert names == EXPECTED_TOOLS, names
         for name in names:
             assert name in console, name
             assert name not in hero, name

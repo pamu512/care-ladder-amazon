@@ -20,7 +20,7 @@ Amazon **Build, Ship, Shape** (draft — no Final Submit).
 | **MCP** | Spec **2025-11-25+** Streamable HTTP at `/mcp`. |
 | **AWS Builder mini** | **Not filed.** No Bedrock / AgentCore in-tree. |
 
-**MCP tools:** `start_or_resume_incident` · `check_in_prompt` · `advance_rung` · `resolve_incident` · `get_incident_status` · `notify_caretaker` · `request_call` · `caregiver_ack` · `caregiver_outcome`
+**MCP tools:** `start_or_resume_incident` · `check_in_prompt` · `advance_rung` · `resolve_incident` · `get_incident_status` · `notify_caretaker` · `request_call` · `caregiver_ack` · `caregiver_outcome` · `defer_escalation` · `tick_care_timers` · `how_is_household` · `confirm_schedule_pin`
 
 **Proactive Events:** optional awareness chime only. Default **off**
 (`CARE_LADDER_PROACTIVE=0`). Schema-locked; no rich buttons. Local sim

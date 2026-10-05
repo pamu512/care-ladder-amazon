@@ -18,6 +18,10 @@ EXPECTED_TOOLS = {
     "request_call",
     "caregiver_ack",
     "caregiver_outcome",
+    "defer_escalation",
+    "tick_care_timers",
+    "how_is_household",
+    "confirm_schedule_pin",
 }
 
 
