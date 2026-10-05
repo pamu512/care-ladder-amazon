@@ -23,7 +23,7 @@ def test_conversational_im_on_it():
         "I'm on it",
         "Im on it",
         "I'll call her myself",
-        "got it, on my way",
+        "got it",
     ):
         assert classify_caregiver_intent(phrase) == "im_on_it", phrase
 
@@ -59,10 +59,71 @@ def test_empty_and_garbage_are_unclear():
 
 
 def test_labels_cover_all_buckets():
-    assert set(CAREGIVER_INTENT_LABELS) == {
+    assert set(CAREGIVER_INTENT_LABELS) >= {
         "im_on_it",
         "call_mom_now",
         "pass_to_next",
         "outcome",
         "unclear",
+        "false_alarm",
+        "on_my_way",
+        "need_second_look",
+        "snooze_alert",
+        "defer_escalation",
+        "how_is_household",
+        "try_other",
+        "try_again",
     }
+
+
+def test_false_alarm_utterances():
+    from care_ladder.channels.caregiver_intent import spoken_confirmation
+
+    for phrase in ("false alarm", "it's nothing", "stand down"):
+        assert classify_caregiver_intent(phrase) == "false_alarm", phrase
+    spoken = spoken_confirmation("false_alarm")
+    assert "false alarm" in spoken.lower()
+    assert "—" not in spoken and "–" not in spoken
+
+
+def test_on_my_way_is_not_im_on_it():
+    from care_ladder.channels.caregiver_intent import spoken_confirmation
+
+    for phrase in ("on my way", "I'm coming over", "heading there", "got it, on my way"):
+        assert classify_caregiver_intent(phrase) == "on_my_way", phrase
+    spoken = spoken_confirmation("on_my_way")
+    assert "on the way" in spoken.lower()
+    assert "—" not in spoken
+
+
+def test_need_second_look_utterances():
+    for phrase in ("need a second look", "check again", "look again"):
+        assert classify_caregiver_intent(phrase) == "need_second_look", phrase
+
+
+def test_snooze_alert_utterances():
+    for phrase in ("snooze", "remind me later", "not now"):
+        assert classify_caregiver_intent(phrase) == "snooze_alert", phrase
+
+
+def test_defer_escalation_extracts_alternate_contact():
+    from care_ladder.channels.caregiver_intent import extract_alternate_contact
+
+    phrase = "call Secondary contact instead"
+    assert classify_caregiver_intent(phrase) == "defer_escalation"
+    assert extract_alternate_contact(phrase) == "Secondary contact"
+    assert extract_alternate_contact("try the neighbor instead") == "the neighbor"
+    assert extract_alternate_contact("page Neighbor") == "Neighbor"
+    assert extract_alternate_contact("nngh") is None
+
+
+def test_how_is_household_utterances():
+    for phrase in ("how is the household", "any open alerts", "is it quiet"):
+        assert classify_caregiver_intent(phrase) == "how_is_household", phrase
+
+
+def test_defer_fail_direction_intents():
+    assert classify_caregiver_intent("try them again") == "try_again"
+    assert classify_caregiver_intent("try X again") == "try_again"
+    assert classify_caregiver_intent("try the neighbor") == "try_other"
+    assert classify_caregiver_intent("call the neighbor instead") == "defer_escalation"

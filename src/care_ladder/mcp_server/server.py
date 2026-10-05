@@ -16,12 +16,21 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 
 from care_ladder.audit.store import AuditStore
+from care_ladder.channels.apl_notify import apl_notify_card
 from care_ladder.channels.care_conversation import (
     ACK_ACTIONS,
     CareConversation,
+    apply_caregiver_intent,
     ensure_family_paged,
 )
-from care_ladder.channels.caregiver_intent import classify_caregiver_intent
+from care_ladder.channels.caregiver_intent import (
+    DIRECTION_ACTIONS,
+    VOICE_ACTIONS,
+    classify_caregiver_intent,
+    extract_alternate_contact,
+    spoken_confirmation,
+)
+from care_ladder.learning.schedule import default_book
 from care_ladder.channels.dial import StubDialer
 from care_ladder.channels.speaker import SpeakerSimulator
 from care_ladder.ladder.orchestrator import run_incident
@@ -194,6 +203,9 @@ def start_or_resume_incident(
     )
     # Keep the caller-visible id stable even though run_incident mints its own.
     incident.id = iid
+    conv = CareConversation._by_household.get(household_id)
+    if conv is not None:
+        conv.incident_id = iid
     _stamp_via_mcp(incident)
     sess = {
         "incident": incident,
@@ -333,13 +345,31 @@ def get_incident_status(household_id: str, incident_id: str) -> dict[str, Any]:
     )
 
 
+def _latest_incident_id(household_id: str) -> str | None:
+    for key, sess in reversed(list(_SESSIONS.items())):
+        if sess.get("household_id") == household_id:
+            return sess["incident"].id
+    conv = CareConversation._by_household.get(household_id)
+    return conv.incident_id if conv is not None else None
+
+
+def _time_since_cue_sec(inc) -> int:
+    created = getattr(inc, "created_at", None)
+    if created is None:
+        return 0
+    now = datetime.now(timezone.utc)
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=timezone.utc)
+    return max(0, int((now - created).total_seconds()))
+
+
 def _page_mobile(sess: dict[str, Any], household_id: str, reason: str) -> CareConversation:
     inc = sess["incident"]
     plan = load_care_plan(_AMAZON_PLAN)
     next_name = (
         plan.secondary.display_name if plan.secondary is not None else "Secondary contact"
     )
-    return ensure_family_paged(
+    conv = ensure_family_paged(
         household_id,
         incident_id=inc.id,
         cue_kind=inc.cue.kind,
@@ -349,6 +379,15 @@ def _page_mobile(sess: dict[str, Any], household_id: str, reason: str) -> CareCo
         countdown_sec=180,
         next_contact=next_name,
     )
+    conv._refresh_apl(_time_since_cue_sec(inc))
+    return conv
+
+
+def _parse_now(now_iso: str) -> datetime:
+    raw = (now_iso or "").strip()
+    if not raw:
+        return datetime.now(timezone.utc)
+    return datetime.fromisoformat(raw.replace("Z", "+00:00"))
 
 
 @mcp.tool()
@@ -368,6 +407,7 @@ def notify_caretaker(household_id: str, incident_id: str) -> dict[str, Any]:
         "simulated": True,
         "surface": "alexa_mobile",
         "inform_card": conv.inform_card,
+        "apl_card": conv.apl_card,
         "fsm_state": conv.state,
     }
     _append_mcp_event(sess, "notify_caretaker", extra)
@@ -380,6 +420,13 @@ def notify_caretaker(household_id: str, incident_id: str) -> dict[str, Any]:
             "simulated": True,
             "surface": "alexa_mobile",
             "inform_card": conv.inform_card,
+            "apl_card": conv.apl_card or apl_notify_card(
+                thumbnail=f"blurred:{inc.id}",
+                household_label=f"{household_id} · Resident",
+                time_since_cue_sec=_time_since_cue_sec(inc),
+                cue_text=str(inc.cue.kind).replace("_", " "),
+                countdown_sec=180,
+            ),
             "fsm_state": conv.state,
         },
         household_id,
@@ -444,8 +491,9 @@ def caregiver_ack(
             household_id,
             incident_id,
         )
-    resolved = action if action in ACK_ACTIONS else classify_caregiver_intent(utterance)
-    if resolved not in ACK_ACTIONS:
+    resolved = action if action else classify_caregiver_intent(utterance)
+    allowed = set(ACK_ACTIONS) | set(VOICE_ACTIONS) | set(DIRECTION_ACTIONS)
+    if resolved not in allowed:
         _persist(sess)
         return _with_snapshot(
             {
@@ -459,23 +507,43 @@ def caregiver_ack(
         )
     conv = _page_mobile(sess, household_id, reason="caregiver_ack")
     already = conv.escalation_stopped
-    conv.ack(resolved, by="Primary contact", raw=utterance or action)
+    alt = extract_alternate_contact(utterance)
+    apply_caregiver_intent(
+        conv,
+        resolved,
+        by="Primary contact",
+        raw=utterance or action,
+        alternate=alt,
+    )
     inc = sess["incident"]
     now = datetime.now(timezone.utc)
-    if inc.acked_by is None:
+    if inc.acked_by is None and conv.owner:
         inc.acked_by = conv.owner
         inc.acked_at = now
+    if conv.state == "closed" and inc.status != "resolved":
+        inc.status = "resolved"
+        _append_mcp_event(
+            sess,
+            "resolve",
+            {
+                "reason": conv.acked_action or resolved,
+                "channel": "alexa_mobile",
+                "owner": conv.owner,
+                "fsm_state": conv.state,
+            },
+        )
     _append_mcp_event(
         sess,
         "caregiver_ack",
         {
-            "action": conv.acked_action,
+            "action": conv.acked_action or resolved,
             "by": conv.owner,
             "raw": utterance,
             "channel": "alexa_mobile",
             "first_wins": True,
             "already_acked": already,
             "fsm_state": conv.state,
+            "spoken": conv.last_spoken,
         },
     )
     _persist(sess)
@@ -483,13 +551,15 @@ def caregiver_ack(
         {
             "incident_id": incident_id,
             "acked": True,
-            "action": conv.acked_action,
+            "action": conv.acked_action or resolved,
             "owner": conv.owner,
             "channel": "alexa_mobile",
-            "escalation_stopped": True,
-            "ask_outcome": True,
+            "escalation_stopped": conv.escalation_stopped,
+            "ask_outcome": conv.acked_action in ACK_ACTIONS
+            or conv.acked_action == "on_my_way",
             "already_acked": already,
             "fsm_state": conv.state,
+            "spoken": conv.last_spoken or spoken_confirmation(resolved, alternate=alt),
         },
         household_id,
         incident_id,
@@ -562,6 +632,153 @@ def caregiver_outcome(
         },
         household_id,
         incident_id,
+    )
+
+
+@mcp.tool()
+def defer_escalation(
+    household_id: str,
+    incident_id: str,
+    alternate_contact: str = "",
+    utterance: str = "",
+    now_iso: str = "",
+) -> dict[str, Any]:
+    """Defer the current escalate to alternate_contact. Notify X; no auto-dial."""
+    sess = _SESSIONS.get(_session_key(household_id, incident_id))
+    if sess is None:
+        return _with_snapshot(
+            {"error": "unknown incident", "incident_id": incident_id},
+            household_id,
+            incident_id,
+        )
+    name = (alternate_contact or "").strip() or extract_alternate_contact(utterance) or ""
+    if not name:
+        return _with_snapshot(
+            {"error": "missing_alternate_contact", "acked": False},
+            household_id,
+            incident_id,
+        )
+    conv = _page_mobile(sess, household_id, reason="defer_escalation")
+    conv.defer(
+        name,
+        by="Primary contact",
+        raw=utterance or f"call {name} instead",
+        now=_parse_now(now_iso),
+    )
+    _append_mcp_event(
+        sess,
+        "defer_escalation",
+        {
+            "alternate_contact": name,
+            "fsm_state": conv.state,
+            "spoken": conv.last_spoken,
+            "channel": "alexa_mobile",
+        },
+    )
+    _persist(sess)
+    return _with_snapshot(
+        {
+            "incident_id": incident_id,
+            "fsm_state": conv.state,
+            "alternate_contact": name,
+            "spoken": conv.last_spoken,
+            "defer_deadline": (
+                conv.defer_deadline.isoformat() if conv.defer_deadline else None
+            ),
+        },
+        household_id,
+        incident_id,
+    )
+
+
+@mcp.tool()
+def tick_care_timers(
+    household_id: str,
+    incident_id: str,
+    now_iso: str = "",
+    monitored_utterance: str = "",
+) -> dict[str, Any]:
+    """Advance soft-escalate / defer / snooze timers. Never auto-dials."""
+    sess = _SESSIONS.get(_session_key(household_id, incident_id))
+    if sess is None:
+        return _with_snapshot(
+            {"error": "unknown incident", "incident_id": incident_id},
+            household_id,
+            incident_id,
+        )
+    conv = CareConversation._by_household.get(household_id) or _page_mobile(
+        sess, household_id, reason="tick"
+    )
+    before = conv.state
+    conv.tick(_parse_now(now_iso), monitored_raw=monitored_utterance)
+    extra = {
+        "from_state": before,
+        "fsm_state": conv.state,
+        "monitored_report": conv.monitored_report,
+        "ask_primary": conv.state == "defer_failed",
+        "direction_actions": list(
+            conv.audit_events()[-1].detail.get("direction_actions", [])
+        )
+        if conv.state == "defer_failed"
+        else [],
+        "dial": False,
+    }
+    _append_mcp_event(sess, "tick_care_timers", extra)
+    _persist(sess)
+    return _with_snapshot(
+        {
+            "incident_id": incident_id,
+            **extra,
+        },
+        household_id,
+        incident_id,
+    )
+
+
+@mcp.tool()
+def how_is_household(household_id: str) -> dict[str, Any]:
+    """Status intent: last cue, last ack, open or quiet since."""
+    conv = CareConversation._by_household.get(household_id)
+    iid = _latest_incident_id(household_id)
+    if conv is None:
+        status = {
+            "household_id": household_id,
+            "last_cue": None,
+            "last_ack": None,
+            "open": False,
+            "quiet_since": None,
+            "fsm_state": "idle",
+            "spoken": "The household is quiet. No open Care Ladder alert.",
+        }
+    else:
+        status = conv.household_status()
+        if iid:
+            status["incident_id"] = iid
+        status["spoken"] = spoken_confirmation("how_is_household")
+    return _with_snapshot(status, household_id, iid)
+
+
+@mcp.tool()
+def confirm_schedule_pin(household_id: str, window: str = "") -> dict[str, Any]:
+    """Caregiver confirms a proposed repeating window pin. Roster is informed."""
+    book = default_book()
+    pin = book.confirm_pin(household_id, window)
+    iid = _latest_incident_id(household_id)
+    sess = (
+        _SESSIONS.get(_session_key(household_id, iid))
+        if iid
+        else None
+    )
+    if sess is not None:
+        _append_mcp_event(sess, "schedule_pinned", pin)
+        _persist(sess)
+    return _with_snapshot(
+        {
+            **pin,
+            "household_id": household_id,
+        },
+        household_id,
+        iid,
     )
 
 
