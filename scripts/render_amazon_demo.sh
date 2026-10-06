@@ -108,9 +108,9 @@ MUSIC_GAIN = {
 }
 BEAT_XFADE = 0.36
 # Solid hold after each beat, longer than the xfade so leftover text
-# cannot sit in the overlap window (frame rounding can eat ~0.15s).
-# Opening VO is longer; keep the clear short enough to stay under 3:00.
-BEAT_CLEAR = 0.48
+# cannot sit in the overlap window. Opening VO is longer; keep the
+# clear short enough to stay under 3:00.
+BEAT_CLEAR = 0.52
 ROOM_MIX = 0.18
 
 
@@ -148,7 +148,7 @@ def concat_audio(wavs: list[Path], dest: Path, beat: str, room: Path) -> None:
         idx += 1
         n_lab += 1
         if i < len(wavs) - 1:
-            g = gap(f"{beat}-{i}", 0.30, 0.45)
+            g = gap(f"{beat}-{i}", 0.28, 0.40)
             inputs += ["-stream_loop", "-1", "-t", f"{g:.3f}", "-i", str(room)]
             filt.append(
                 f"[{idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=mono[g{i}]"
@@ -166,7 +166,8 @@ def load_sent_durs(path: Path) -> dict[str, list[float]]:
     for raw in path.read_text().splitlines():
         if not raw.strip() or raw.startswith("#"):
             continue
-        clip, _idx, dur_s, _seed = raw.split("\t", 3)
+        parts = raw.split("\t")
+        clip, dur_s = parts[0], parts[2]
         out.setdefault(clip, []).append(float(dur_s))
     return out
 

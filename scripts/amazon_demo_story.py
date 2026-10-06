@@ -228,7 +228,11 @@ def main() -> int:
             f"Time since cue: just now. Missed check-ins: 1. "
             f"Already tried with no response: nobody yet."
         ),
-        "me_inform": me_inform,
+        "me_inform": {
+            k: v
+            for k, v in (me_inform or {}).items()
+            if k != "blurred_frame_ref"
+        },
         "apl": {
             "householdLabel": me_apl["householdLabel"],
             "timeSinceCue": me_apl["timeSinceCue"],

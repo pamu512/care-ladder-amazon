@@ -97,12 +97,15 @@ def clip_hash(clip: str, idx: int, text: str) -> int:
 
 
 def gap_after(clip: str, idx: int, text: str, n_sent: int) -> float:
-    """0.30 to 0.50s between sentences; 0.65 to 0.85s after mom lines."""
+    """Tight sentence gaps so the longer opening still fits under 3:00.
+
+    Base 0.18 to 0.28s; 0.38 to 0.50s after mom lines. Never atempo.
+    """
     _ = n_sent
     h = clip_hash(clip, idx, "gap")
     if MOM_RE.search(text):
-        return 0.65 + (h % 21) / 100.0
-    return 0.30 + (h % 21) / 100.0
+        return 0.48 + (h % 13) / 100.0
+    return 0.28 + (h % 15) / 100.0
 
 
 def write_timings(rows: list[tuple[str, int, float]]) -> None:
@@ -227,6 +230,34 @@ def ensure_room() -> Path:
     return dest
 
 
+def trim_take(src: Path, dest: Path) -> None:
+    """Drop leading clicks and trailing TTS pad. Keep a 150ms speech tail.
+
+    stop_periods=-1 trims from the end only, so a mid-line breath is safe.
+    """
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(src),
+            "-af",
+            (
+                "silenceremove=start_periods=1:start_threshold=-42dB:start_silence=0.06:"
+                "stop_periods=-1:stop_threshold=-42dB:stop_silence=0.15"
+            ),
+            "-ar",
+            "24000",
+            "-ac",
+            "1",
+            str(dest),
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def process_wav(src: Path, dest: Path, kind: str, room: Path) -> None:
     """HP80, presence EQ, light comp, room bed, LUFS. No atempo. No hard gate."""
     dest.parent.mkdir(parents=True, exist_ok=True)
@@ -337,6 +368,44 @@ def concat_with_gaps(parts: list[tuple[Path, float]], dest: Path, room: Path) ->
     )
 
 
+def reprocess_concats(room: Path) -> int:
+    """Rebuild clip wavs from existing sentence takes with current gaps."""
+    rows = read_lines()
+    if ONLY:
+        rows = [r for r in rows if r[0] in ONLY]
+    timing_out: list[tuple[str, int, float]] = []
+    for clip, speaker, text in rows:
+        dest = VO / f"{clip}.wav"
+        override = anoop_override(clip) if speaker == "N" else None
+        if override is not None:
+            print("anoop override", clip, override)
+            process_wav(override, dest, VOICE[speaker]["eq"], room)
+            continue
+        sentences = split_sentences(text)
+        assembled: list[tuple[Path, float]] = []
+        missing = False
+        for idx, sent in enumerate(sentences):
+            take = TAKES_DIR / f"{clip}_s{idx}.wav"
+            if not take.is_file():
+                print(f"missing take {take}", file=sys.stderr)
+                missing = True
+                break
+            trimmed = TAKES_DIR / f"{clip}_s{idx}_trim.wav"
+            trim_take(take, trimmed)
+            timing_out.append((clip, idx, wav_duration(trimmed)))
+            assembled.append((trimmed, gap_after(clip, idx, sent, len(sentences))))
+        if missing:
+            return 2
+        raw = TAKES_DIR / f"{clip}_concat.wav"
+        concat_with_gaps(assembled, raw, room)
+        process_wav(raw, dest, VOICE[speaker]["eq"], room)
+        print("reprocessed", dest, f"{wav_duration(dest):.2f}s")
+    timing_out.sort(key=lambda r: (r[0], r[1]))
+    write_timings(timing_out)
+    print("VO wavs in", VO)
+    return 0
+
+
 def anoop_override(clip: str) -> Path | None:
     for name in (f"{clip}.wav", f"{clip}.mp3"):
         p = ANOOP / name
@@ -349,9 +418,9 @@ def selfcheck() -> int:
     bits = split_sentences("The cue, the time, how long ago, any missed check-ins.")
     assert bits[0] == "The cue," and bits[1] == "the time,"
     g = gap_after("b03", 0, "x", 2)
-    assert 0.30 <= g <= 0.50
+    assert 0.28 <= g <= 0.43
     gm = gap_after("b01", 1, "So when something happens to my mom, we only find out.", 2)
-    assert 0.65 <= gm <= 0.85
+    assert 0.48 <= gm <= 0.61
     src = Path(__file__).read_text()
     settings = VO / "SETTINGS.txt"
     blobs = [src]
@@ -412,6 +481,8 @@ def main() -> int:
     TAKES_DIR.mkdir(parents=True, exist_ok=True)
     room = ensure_room()
     ensure_music()
+    if os.environ.get("REPROCESS", "0") == "1":
+        return reprocess_concats(room)
 
     rows = read_lines()
     if ONLY:
@@ -449,8 +520,10 @@ def main() -> int:
             take = TAKES_DIR / f"{clip}_s{idx}.wav"
             print(f"tts {clip} sent={idx} {cfg['voice']} {sent[:70]}")
             _edge_tts_wav(cfg["voice"], cfg["rate"], sent, take)
-            timing_out.append((clip, idx, wav_duration(take)))
-            assembled.append((take, gap_after(clip, idx, sent, len(sentences))))
+            trimmed = TAKES_DIR / f"{clip}_s{idx}_trim.wav"
+            trim_take(take, trimmed)
+            timing_out.append((clip, idx, wav_duration(trimmed)))
+            assembled.append((trimmed, gap_after(clip, idx, sent, len(sentences))))
 
         raw = TAKES_DIR / f"{clip}_concat.wav"
         concat_with_gaps(assembled, raw, room)

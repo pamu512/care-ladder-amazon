@@ -9,7 +9,8 @@ Per-voice:
 
 Granularity: one edge-tts call per sentence. The cue list is generated
 clause by clause so the commas are audible.
-Gaps: 0.30 to 0.50s between sentences; 0.65 to 0.85s after mom lines.
+Gaps: 0.28 to 0.42s between sentences; 0.48 to 0.60s after mom lines.
+Trailing TTS pad is trimmed from the end only (stop_periods=-1).
 Never atempo.
 
 TTS text spells numbers (two hundred and four). Kaggle is spoken as Kaggle.
