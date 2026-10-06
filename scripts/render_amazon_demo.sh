@@ -112,7 +112,7 @@ BEAT_XFADE = 0.36
 BEAT_CLEAR = 0.62
 ROOM_MIX = 0.18
 # Extra room-tone hold so routine / architecture stills linger (headroom to 2:45-2:55).
-HOLD_EXTRA = {"b12": 5.0, "b14": 5.5, "b03": 0.6}
+HOLD_EXTRA = {"b12": 3.6, "b14": 4.0, "b03": 0.4}
 KEN_BURNS = {"b03", "b08"}
 
 
