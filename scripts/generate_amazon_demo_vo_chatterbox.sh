@@ -14,6 +14,7 @@ export VO="${VO:-$ROOT/docs/demo/vo/chatterbox}"
 export LINES="${LINES:-$ROOT/docs/demo/vo_lines.tsv}"
 export ANOOP="${ANOOP:-$ROOT/docs/demo/vo/anoop}"
 export FORCE="${FORCE:-0}"
+export FORCE_REFS="${FORCE_REFS:-0}"
 export TAKES="${TAKES:-3}"
 export LINE="${LINE:-}"
 export DEVICE="${DEVICE:-cpu}"
@@ -28,4 +29,5 @@ else
 fi
 
 mkdir -p "$VO"
+"$PY" "$ROOT/scripts/chatterbox_vo.py" --selfcheck
 exec "$PY" "$ROOT/scripts/chatterbox_vo.py"

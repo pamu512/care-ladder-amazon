@@ -70,7 +70,17 @@ h2 { font-size: 28px; font-weight: 600; color: var(--sage); }
   width: 560px; min-height: 420px; background: #111; border-radius: 20px; padding: 24px;
   position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
 }
-.thumb { height: 160px; border-radius: 12px; background: linear-gradient(135deg,#3a3a3a,#222); display: grid; place-items: center; color: var(--faint); }
+.thumb { height: 160px; border-radius: 12px; background: linear-gradient(160deg,#3d4a3c,#2a2d28 55%,#232018); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--ink); }
+.thumb svg { display: block; }
+.thumb .cue { font-size: 18px; letter-spacing: 0.04em; color: var(--sage); }
+.cam-frame { height: 280px; margin-top: 28px; border-radius: 16px; background: #15171b; position: relative; overflow: hidden; }
+.cam-frame:before { content: ""; position: absolute; inset: -12px; background: linear-gradient(180deg,#2a2d33,#15171b); filter: blur(10px); }
+.cam-frame:after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(40,44,50,0.15), #111318 72%); }
+.cam-icon { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; }
+.dir-stack { flex-direction: column; align-items: stretch; }
+.dir-stack i { text-align: center; padding: 12px 14px; }
+.dir-stack i.picked { background: var(--sage); color: #1E1C18; position: relative; }
+.dir-stack i.picked:after { content: ""; position: absolute; right: 18px; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: rgba(30,28,24,0.35); transform: translateY(-50%) scale(1.15); box-shadow: 0 0 0 6px rgba(30,28,24,0.12); }
 .btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
 .btns i { font-style: normal; border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 14px; }
 .split { display: flex; height: 720px; }
@@ -141,11 +151,40 @@ h2 { font-size: 28px; font-weight: 600; color: var(--sage); }
 </div>
 <div id="apl_card" class="scene">
   <div class="apl">
-    <div class="thumb">placeholder thumbnail</div>
+    <div class="thumb">
+      <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true">
+        <path fill="#A8B5A0" d="M32 10 L58 32 H50 V54 H14 V32 H6 Z"/>
+        <rect fill="#2E2B25" x="27" y="38" width="10" height="16"/>
+      </svg>
+      <div class="cue" id="aplCue">Cue: 10:42</div>
+    </div>
     <h2 id="aplHouse" style="margin-top:16px"></h2>
     <p class="sub" id="aplMeta"></p>
     <div class="btns" id="aplBtns"></div>
   </div>
+</div>
+<div id="camera_off" class="scene">
+  <div class="card">
+    <p class="tiny">CAMERA</p>
+    <div class="cam-frame">
+      <div class="cam-icon">
+        <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
+          <rect x="10" y="28" width="52" height="36" rx="8" fill="none" stroke="#EFEAE2" stroke-width="4"/>
+          <path d="M62 36 L78 28 V64 L62 56 Z" fill="none" stroke="#EFEAE2" stroke-width="4"/>
+          <line x1="16" y1="16" x2="72" y2="72" stroke="#D98873" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <h2 style="margin-top:22px">Camera off</h2>
+    <p class="sub">nobody watches a feed</p>
+  </div>
+</div>
+<div id="try_else" class="scene">
+  <div class="phone" style="width:360px"><div class="notch"></div><div class="inner">
+    <p class="tiny">ANOOP · ALEXA+</p>
+    <p class="sub" style="margin-top:12px">What should I do next?</p>
+    <div class="btns dir-stack" id="tryBtns" style="margin-top:28px"></div>
+  </div></div>
 </div>
 <div id="defer_sister" class="scene">
   <div class="card">
@@ -250,6 +289,8 @@ function fill(story) {
   document.getElementById("notifyBody").textContent = story.me_alert || "";
   const apl = story.apl || {};
   document.getElementById("aplHouse").textContent = apl.householdLabel || "Mum";
+  document.getElementById("aplCue").textContent =
+    `Cue: ${apl.cueClock || (story.cue && story.cue.at) || "10:42"}`;
   document.getElementById("aplMeta").textContent =
     `${apl.timeSinceCue || "just now"} · ${apl.cueText || "camera cue"}`;
   document.getElementById("aplBtns").innerHTML =
@@ -261,6 +302,12 @@ function fill(story) {
   document.getElementById("failPhrase").textContent = story.sister_unanswered || "";
   document.getElementById("dirBtns").innerHTML =
     (story.direction_labels || []).map(x => `<i>${x}</i>`).join("");
+  const tryLabels = story.direction_labels || ["Try someone else", "Try again", "On my way", "False alarm", "Snooze"];
+  document.getElementById("tryBtns").innerHTML = tryLabels.map((x, i) => {
+    const label = x.charAt(0).toUpperCase() + x.slice(1);
+    const picked = label.toLowerCase() === "try someone else" || i === 0;
+    return `<i class="${picked ? "picked" : ""}">${label}</i>`;
+  }).join("");
   document.getElementById("alexaHome").textContent = story.alexa_home || "Are you okay?";
   document.getElementById("silentLine").textContent = "No answer came back from the house.";
   const nr = story.neighbor_reason || {};

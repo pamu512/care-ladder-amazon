@@ -62,6 +62,8 @@ def main() -> int:
             bad.append(f"secret/model path in {name}")
         if "live video" in text.lower() and "nobody" not in text.lower():
             bad.append(f"live video claim in {name}")
+        if name.endswith("demo_overlays.html") and "placeholder" in text.lower():
+            bad.append(f"placeholder on screen in {name}")
     if bad:
         print("COPY FAIL")
         for b in bad:

@@ -226,7 +226,8 @@ def main() -> int:
             "householdLabel": me_apl["householdLabel"],
             "timeSinceCue": me_apl["timeSinceCue"],
             "cueText": "camera cue",
-            "thumbnail": "placeholder",
+            "thumbnail": "home-icon",
+            "cueClock": "10:42",
             "actions": me_apl["actions"],
         },
         "defer": {

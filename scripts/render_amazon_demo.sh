@@ -71,14 +71,14 @@ work.mkdir(parents=True, exist_ok=True)
 
 BEATS = [
     ("b01", ["b01.wav"], ["b01_map.png"]),
-    ("b02", ["b02.wav"], ["b02_battery.png", "b02_call.png"]),
+    ("b02", ["b02.wav"], ["b02_battery.png", "b02_call.png", "b02_camera.png"]),
     ("b03", ["b03.wav"], ["b03_title.png"]),
     ("b04", ["b04.wav"], ["b04_ladder.png"]),
     ("b05", ["b05.wav"], ["b05_cue.png"]),
     ("b06", ["b06.wav"], ["b06_notify.png", "b06_apl.png"]),
     ("b07", ["b07a.wav", "b07b.wav"], ["b07_defer.png"]),
     ("b08", ["b08a.wav", "b08b.wav", "b08c.wav"], ["b08_split.png"]),
-    ("b09", ["b09.wav"], ["b09_silent.png"]),
+    ("b09", ["b09.wav"], ["b09_tryelse.png"]),
     ("b10", ["b10a.wav", "b10b.wav"], ["b10_neighbor.png"]),
     ("b11", ["b11a.wav", "b11b.wav"], ["b11_going.png", "b11_okay.png", "b11_status.png"]),
     ("b12", ["b12.wav"], ["b12_routine.png", "b12_roster.png"]),
@@ -87,24 +87,27 @@ BEATS = [
     ("b15", ["b15.wav"], ["b15_close.png"]),
 ]
 
-# Music: silent on the mum open; ducked mid-tape; back for resolution.
+# Music source is loudnormed ~-24 LUFS. Linear gains duck it ~22 dB
+# under speech, out on the mum open, back on the resolution.
 MUSIC_GAIN = {
     "b01": 0.0,
-    "b02": 0.07,
-    "b03": 0.08,
-    "b04": 0.08,
-    "b05": 0.07,
-    "b06": 0.08,
-    "b07": 0.07,
-    "b08": 0.07,
-    "b09": 0.06,
-    "b10": 0.07,
-    "b11": 0.10,
-    "b12": 0.10,
-    "b13": 0.09,
-    "b14": 0.08,
-    "b15": 0.09,
+    "b02": 0.22,
+    "b03": 0.22,
+    "b04": 0.22,
+    "b05": 0.22,
+    "b06": 0.22,
+    "b07": 0.22,
+    "b08": 0.20,
+    "b09": 0.22,
+    "b10": 0.22,
+    "b11": 0.34,
+    "b12": 0.34,
+    "b13": 0.32,
+    "b14": 0.30,
+    "b15": 0.32,
 }
+BEAT_XFADE = 0.45
+ROOM_MIX = 0.18
 
 
 def dur(path: Path) -> float:
@@ -125,7 +128,7 @@ def ff(*args):
     )
 
 
-def concat_audio(wavs: list[Path], dest: Path, beat: str) -> None:
+def concat_audio(wavs: list[Path], dest: Path, beat: str, room: Path) -> None:
     if len(wavs) == 1:
         ff("-i", str(wavs[0]), "-c", "copy", str(dest))
         return
@@ -141,12 +144,10 @@ def concat_audio(wavs: list[Path], dest: Path, beat: str) -> None:
         idx += 1
         n_lab += 1
         if i < len(wavs) - 1:
-            g = gap(f"{beat}-{i}", 0.30, 0.50)
-            if beat in {"b01", "b11"}:
-                g = gap(f"{beat}-{i}", 0.80, 1.15)
-            inputs += ["-f", "lavfi", "-t", f"{g:.3f}", "-i", "anullsrc=r=44100:cl=mono"]
+            g = gap(f"{beat}-{i}", 0.20, 0.35)
+            inputs += ["-stream_loop", "-1", "-t", f"{g:.3f}", "-i", str(room)]
             filt.append(
-                f"[{idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=mono,volume=0[g{i}]"
+                f"[{idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=mono[g{i}]"
             )
             labels.append(f"[g{i}]")
             idx += 1
@@ -154,11 +155,125 @@ def concat_audio(wavs: list[Path], dest: Path, beat: str) -> None:
     ff(*inputs, "-filter_complex", ";".join(filt), "-map", "[out]", str(dest))
 
 
+def load_sent_durs(path: Path) -> dict[str, list[float]]:
+    out: dict[str, list[float]] = {}
+    if not path.is_file():
+        return out
+    for raw in path.read_text().splitlines():
+        if not raw.strip() or raw.startswith("#"):
+            continue
+        clip, _idx, dur_s, _seed = raw.split("\t", 3)
+        out.setdefault(clip, []).append(float(dur_s))
+    return out
+
+
+def still_lens(beat: str, d: float, n: int, sent: dict[str, list[float]]) -> list[float]:
+    if n <= 1:
+        return [d]
+    if beat == "b02" and "b02" in sent and sent["b02"]:
+        raw = sum(sent["b02"]) or 1.0
+        phone = max(0.8, d * (sent["b02"][0] / raw))
+        phone = min(phone, d - 0.5)
+        batt = max(0.45, phone * 0.58)
+        call = max(0.35, phone - batt)
+        cam = max(0.4, d - batt - call)
+        return [batt, call, cam][:n]
+    share = d / n
+    lens = [share] * (n - 1)
+    lens.append(max(0.2, d - share * (n - 1)))
+    return lens
+
+
+def probe_dur(path: Path) -> float:
+    out = subprocess.check_output(
+        [
+            "ffprobe", "-v", "error", "-show_entries", "format=duration",
+            "-of", "default=nw=1:nk=1", str(path),
+        ],
+        text=True,
+    )
+    return float(out.strip())
+
+
+def mix_beat(vis: Path, voice: Path, dest: Path, mg: float, music: Path, room: Path) -> None:
+    """Always map VO + room. Never let the still's silent track win."""
+    cmd = [
+        "-i", str(vis),
+        "-i", str(voice),
+        "-stream_loop", "-1", "-i", str(room),
+    ]
+    if music.is_file() and mg > 0:
+        cmd += ["-stream_loop", "-1", "-i", str(music)]
+        filt = (
+            f"[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=mono[v];"
+            f"[2:a]volume={ROOM_MIX:.3f},aformat=sample_fmts=fltp[r];"
+            f"[3:a]volume={mg:.3f},aformat=sample_fmts=fltp[m];"
+            f"[v][r][m]amix=inputs=3:duration=first:dropout_transition=0:normalize=0[a]"
+        )
+    else:
+        filt = (
+            f"[1:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=mono[v];"
+            f"[2:a]volume={ROOM_MIX:.3f},aformat=sample_fmts=fltp[r];"
+            f"[v][r]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
+        )
+    ff(
+        *cmd,
+        "-filter_complex", filt,
+        "-map", "0:v", "-map", "[a]",
+        "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+        "-crf", "18",
+        "-c:a", "aac", "-b:a", "128k",
+        "-shortest", "-r", "15", "-s", "1280x720",
+        str(dest),
+    )
+
+
+def xfade_concat(clips: list[Path], durs: list[float], dest: Path, fade: float) -> None:
+    if len(clips) == 1:
+        ff("-i", str(clips[0]), "-c", "copy", str(dest))
+        return
+    fade = min(fade, min(durs) - 0.05) if durs else fade
+    fade = max(0.12, fade)
+    inputs = []
+    for c in clips:
+        inputs += ["-i", str(c)]
+    vprev = "[0:v]"
+    aprev = "[0:a]"
+    filt = []
+    acc = durs[0]
+    for i in range(1, len(clips)):
+        offset = max(0.05, acc - fade)
+        vout = f"[vx{i}]"
+        aout = f"[ax{i}]"
+        filt.append(
+            f"{vprev}[{i}:v]xfade=transition=fade:duration={fade:.3f}:offset={offset:.3f}{vout}"
+        )
+        filt.append(
+            f"{aprev}[{i}:a]acrossfade=d={fade:.3f}:c1=tri:c2=tri{aout}"
+        )
+        vprev, aprev = vout, aout
+        acc = acc + durs[i] - fade
+    filt_s = ";".join(filt)
+    ff(
+        *inputs,
+        "-filter_complex", filt_s,
+        "-map", vprev, "-map", aprev,
+        "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+        "-crf", "18",
+        "-c:a", "aac", "-b:a", "128k",
+        "-r", "15", "-s", "1280x720",
+        str(dest),
+    )
+
+
 music = vo / "music.wav"
+room = vo / "roomtone.wav"
+if not room.is_file():
+    raise SystemExit(f"missing room tone {room}")
+sent_durs = load_sent_durs(vo / "timings.tsv")
 clips = []
+clip_durs = []
 still_for_sheet = []
-total = 0.0
-inter = []
 for i, (beat, wav_names, pngs) in enumerate(BEATS):
     wavs = [vo / n for n in wav_names]
     for w in wavs:
@@ -172,112 +287,64 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
         png_paths.append(p)
     still_for_sheet.append(png_paths[0])
     beat_wav = work / f"{beat}.wav"
-    concat_audio(wavs, beat_wav, beat)
+    concat_audio(wavs, beat_wav, beat, room)
     d = dur(beat_wav)
-    if i == 0:
-        g = 0.0
-    elif beat == "b02":
-        g = gap("after-b01", 0.85, 1.15)
-    else:
-        g = gap(f"after-{BEATS[i-1][0]}", 0.28, 0.62)
-    inter.append(g)
-    total += d + g
-
-# Fit under 180s: first shrink gaps, then a light atempo if speech is long.
-speech = sum(dur(work / f"{b}.wav") for b, _, _ in BEATS)
-if speech + sum(inter) > 176.5:
-    scale = max(0.12, (176.5 - speech) / max(sum(inter), 0.01))
-    if scale < 1:
-        inter = [g * min(1.0, scale) for g in inter]
-        print("scaled inter-beat gaps by", round(min(1.0, scale), 3))
-if speech + sum(inter) > 176.5:
-    rate = min(1.12, (speech + sum(inter)) / 174.0)
-    print("atempo", round(rate, 3), "to fit 3:00")
-    for beat, _, _ in BEATS:
-        src = work / f"{beat}.wav"
-        tmp = work / f"{beat}_fit.wav"
-        ff("-i", str(src), "-af", f"atempo={rate:.4f}", str(tmp))
-        tmp.replace(src)
-
-for i, (beat, _w, pngs) in enumerate(BEATS):
-    beat_wav = work / f"{beat}.wav"
-    d = dur(beat_wav)
+    # Hold the last frame through the beat-change crossfade. Never a black tpad.
+    tail = BEAT_XFADE if i < len(BEATS) - 1 else 0.0
+    if tail > 0.05:
+        pad = work / f"{beat}_pad.wav"
+        ff(
+            "-i", str(beat_wav),
+            "-stream_loop", "-1", "-i", str(room),
+            "-filter_complex",
+            (
+                f"[0]apad=pad_dur={tail:.3f}[v];"
+                f"[1]volume={ROOM_MIX:.3f}[r];"
+                "[v][r]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
+            ),
+            "-map", "[a]",
+            str(pad),
+        )
+        beat_wav = pad
+        d = dur(beat_wav)
     png_paths = [frames / n for n in pngs]
-    share = d / len(png_paths)
+    lens = still_lens(beat, d - tail, len(png_paths), sent_durs)
+    if tail > 0:
+        lens[-1] = lens[-1] + tail
     parts = []
     offset = 0.0
     for j, png in enumerate(png_paths):
-        slen = share if j < len(png_paths) - 1 else max(0.2, d - offset)
+        slen = lens[j] if j < len(lens) else max(0.2, d - offset)
         still = work / f"{beat}_{j}.mp4"
         ff(
             "-loop", "1", "-i", str(png),
-            "-f", "lavfi", "-t", f"{slen:.3f}", "-i", "anullsrc=r=44100:cl=mono",
             "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
             "-crf", "18", "-b:v", "1200k",
-            "-c:a", "aac", "-b:a", "96k",
             "-t", f"{slen:.3f}", "-r", "15", "-s", "1280x720",
+            "-an",
             str(still),
         )
         parts.append(still)
         offset += slen
     vis = work / f"{beat}_vis.mp4"
     if len(parts) == 1:
-        parts[0].replace(vis) if False else ff("-i", str(parts[0]), "-c", "copy", str(vis))
+        ff("-i", str(parts[0]), "-c", "copy", str(vis))
     else:
         lst = work / f"{beat}_vis.txt"
         lst.write_text("".join(f"file '{p}'\n" for p in parts))
         ff("-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(vis))
-    g = inter[i]
-    if g > 0.05:
-        pad = work / f"{beat}_pad.wav"
-        ff(
-            "-i", str(beat_wav),
-            "-af", f"adelay={int(g*1000)}|{int(g*1000)},apad=pad_dur=0.02",
-            str(pad),
-        )
-        beat_wav = pad
-        ff(
-            "-i", str(vis),
-            "-vf", f"tpad=start_duration={g:.3f}:color=0x1E1C18",
-            "-an",
-            str(work / f"{beat}_vpad.mp4"),
-        )
-        vis = work / f"{beat}_vpad.mp4"
     mixed = work / f"{beat}_mix.mp4"
-    mg = MUSIC_GAIN[beat]
-    if music.is_file() and mg > 0:
-        ff(
-            "-i", str(vis),
-            "-i", str(beat_wav),
-            "-stream_loop", "-1", "-i", str(music),
-            "-filter_complex",
-            (
-                f"[2:a]volume={mg:.3f}[m];"
-                f"[1:a][m]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
-            ),
-            "-map", "0:v", "-map", "[a]",
-            "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
-            "-crf", "18",
-            "-c:a", "aac", "-b:a", "128k",
-            "-shortest", "-r", "15", "-s", "1280x720",
-            str(mixed),
-        )
-    else:
-        ff(
-            "-i", str(vis),
-            "-i", str(beat_wav),
-            "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
-            "-crf", "18",
-            "-c:a", "aac", "-b:a", "128k",
-            "-shortest", "-r", "15", "-s", "1280x720",
-            str(mixed),
-        )
+    mix_beat(vis, beat_wav, mixed, MUSIC_GAIN[beat], music, room)
     clips.append(mixed)
-    print("clip", beat, f"{dur(beat_wav):.2f}s")
+    clip_durs.append(probe_dur(mixed))
+    print("clip", beat, f"{clip_durs[-1]:.2f}s")
 
-lst = work / "concat.txt"
-lst.write_text("".join(f"file '{c}'\n" for c in clips))
-ff("-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(out))
+speech = sum(dur(work / f"{b}.wav") for b, _, _ in BEATS)
+print("speech", round(speech, 2), "xfade", BEAT_XFADE, "no atempo")
+if speech > 178.5:
+    print("warning: speech alone is", round(speech, 2), "s; xfade still keeps total near speech")
+
+xfade_concat(clips, clip_durs, out, BEAT_XFADE)
 print("wrote", out)
 
 # Contact sheet: one frame per beat (first still of each beat).
