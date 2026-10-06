@@ -18,6 +18,7 @@ from care_ladder.channels.care_conversation import (
     ensure_family_paged,
 )
 from care_ladder.channels.dial import StubDialer, next_rung_after_no_answer
+from care_ladder.plan_loader import effective_roster
 from care_ladder.learning.profile import (
     effective_no_movement_timeout_sec,
 )
@@ -577,6 +578,14 @@ async def run_incident(
                 basis = "no_response_escalation"
             countdown = int(rung.params.get("countdown_sec", 180))
             cue_text = str(cue.detail.get("cue_text") or cue.kind.replace("_", " "))
+            roster = effective_roster(plan)
+            next_name = (
+                roster[1].name
+                if len(roster) > 1
+                else (
+                    plan.secondary.display_name if plan.secondary else "Secondary contact"
+                )
+            )
             conv = ensure_family_paged(
                 plan.household_id,
                 incident_id=incident.id,
@@ -585,9 +594,8 @@ async def run_incident(
                 blurred_frame_ref=f"blurred:{incident.id}",
                 cue_text=cue_text,
                 countdown_sec=countdown,
-                next_contact=(
-                    plan.secondary.display_name if plan.secondary else "Secondary contact"
-                ),
+                next_contact=next_name,
+                roster=roster,
             )
             _append(
                 events,

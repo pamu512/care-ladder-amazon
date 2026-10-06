@@ -111,8 +111,14 @@ _ON_MY_WAY = re.compile(
     r"("
     r"on\s+my\s+way|"
     r"i['’]?m\s+coming\s+over|"
-    r"heading\s+(?:there|over|in)"
+    r"heading\s+(?:there|over|in)|"
+    r"i['’]?m\s+going"
     r")",
+    re.IGNORECASE,
+)
+
+_LOCAL_NEEDS_HELP = re.compile(
+    r"needs\s+help|not\s+okay|not\s+ok\b",
     re.IGNORECASE,
 )
 
@@ -215,6 +221,23 @@ def extract_alternate_contact(raw: str) -> str | None:
         name = re.sub(r"^try\s+", "", m.group(0), flags=re.IGNORECASE).strip()
         return name or None
     return None
+
+
+def classify_local_outcome(raw: str) -> str:
+    """Map a local-responder outcome line to okay / needs_help / unclear."""
+    from care_ladder.channels.response_intent import classify_response_intent
+
+    text = _WS.sub(" ", (raw or "").strip())
+    if not text:
+        return "unclear"
+    if _LOCAL_NEEDS_HELP.search(text):
+        return "needs_help"
+    intent = classify_response_intent(text)
+    if intent == "needs_human":
+        return "needs_help"
+    if intent == "clear_ok" or re.search(r"\b(ok(?:ay)?|fine|all\s+clear)\b", text, re.I):
+        return "okay"
+    return "unclear"
 
 
 def spoken_confirmation(intent: str, *, alternate: str | None = None) -> str:

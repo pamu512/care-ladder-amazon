@@ -75,13 +75,13 @@ def test_soft_escalate_reprompt_then_next_roster_never_dials():
     rep = next(e for e in conv.audit_events() if e.tool == "soft_reprompt")
     assert "Still waiting" in rep.detail["phrase"]
     assert conv.tick(T0 + timedelta(seconds=119)) == "soft_reprompt"
-    assert conv.tick(T0 + timedelta(seconds=120)) == "soft_next"
+    assert conv.tick(T0 + timedelta(seconds=120)) == "family_paged"
     nxt = next(e for e in conv.audit_events() if e.tool == "soft_next")
     assert nxt.detail["next_contact"] == "Secondary contact"
     assert "not a phone call" in nxt.detail["phrase"].lower()
     later = conv.tick(T0 + timedelta(seconds=600))
-    assert later == "soft_next"
-    assert conv.start_call(1) == "soft_next"
+    assert later == "ladder_exhausted"
+    assert conv.start_call(1) == "ladder_exhausted"
     assert "calling_1" not in {e.tool for e in conv.audit_events()}
     assert "request_call" not in {e.tool for e in conv.audit_events()}
 

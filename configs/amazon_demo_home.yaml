@@ -12,6 +12,18 @@ secondary:
   phone_e164: "+12125550182"   # reserved NPA-555-01XX fiction
 monitored:
   display_name: Resident
+# Family escalation ladder. Neighbor is a same-city local responder who can
+# physically check. Soft timers walk this list in order. Never auto-dials.
+roster:
+  - name: Me
+    relationship: self
+  - name: Wife
+    relationship: spouse
+  - name: Sister
+    relationship: sibling
+  - name: Neighbor
+    relationship: neighbor
+    local_responder: true
 zones:
   - id: living_room
     polygon: [[0, 0], [640, 0], [640, 480], [0, 480]]
