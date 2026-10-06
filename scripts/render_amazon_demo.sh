@@ -309,12 +309,10 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
         d = dur(beat_wav)
     png_paths = [frames / n for n in pngs]
     lens = still_lens(beat, d - tail, len(png_paths), sent_durs)
-    if tail > 0:
-        lens[-1] = lens[-1] + tail
     parts = []
     offset = 0.0
     for j, png in enumerate(png_paths):
-        slen = lens[j] if j < len(lens) else max(0.2, d - offset)
+        slen = lens[j] if j < len(lens) else max(0.2, (d - tail) - offset)
         still = work / f"{beat}_{j}.mp4"
         ff(
             "-loop", "1", "-i", str(png),
@@ -326,6 +324,18 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
         )
         parts.append(still)
         offset += slen
+    # Crossfade onto a solid card so prior text never sits under the next card.
+    if tail > 0.05:
+        clear = work / f"{beat}_clear.mp4"
+        ff(
+            "-f", "lavfi", "-i", "color=c=0x1E1C18:s=1280x720:r=15",
+            "-t", f"{tail:.3f}",
+            "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+            "-crf", "18",
+            "-an",
+            str(clear),
+        )
+        parts.append(clear)
     vis = work / f"{beat}_vis.mp4"
     if len(parts) == 1:
         ff("-i", str(parts[0]), "-c", "copy", str(vis))

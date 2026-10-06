@@ -13,12 +13,14 @@ Per-voice generate() (V4 knobs from the sister OpenCV demo):
             exaggeration=0.62  cfg_weight=0.32  temperature=0.80
   Alexa     exaggeration=0.30  cfg_weight=0.50  temperature=0.60
             extra takes on "Are you okay?" (b08b)
-  Neighbor  exaggeration=0.62  cfg_weight=0.38  temperature=0.82
-            extra takes on "I'm going." / "She's okay."
+  Neighbor  exaggeration=0.45  cfg_weight=0.45  temperature=0.80
+            calm / relieved; extra takes on "I'm going." / "She's okay."
 
-Takes: 3 seeds per sentence (8 for b08b, 6 for b10b/b11a).
-Pick: whisper tiny.en WER match + highest f0 std + no clipping + no mid-phrase pause.
-Then a duration sanity check. Chosen seed recorded in seeds.tsv.
+Takes: 3 seeds per sentence (8 for b02/b08b/b10b/b11a, 6 for b05/b06/b14).
+Pick: whisper tiny.en WER match + highest f0 std + no clipping + no mid-phrase
+pause + no clipped last word. Then a duration sanity check.
+TTS text spells numbers (two hundred and four) and uses Kag-gull for Kaggle.
+Chosen seed recorded in seeds.tsv.
 Never slow or speed with atempo.
 
 Edit gaps (in beat assembly, not TTS):

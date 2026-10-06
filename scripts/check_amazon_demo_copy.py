@@ -40,8 +40,17 @@ def collect() -> list[tuple[str, str]]:
     return blobs
 
 
+DIGIT = re.compile(r"[0-9]")
+
+
 def main() -> int:
     bad: list[str] = []
+    for raw in VO_LINES.read_text().splitlines():
+        if not raw.strip() or raw.startswith("#"):
+            continue
+        _clip, _sp, text = raw.split("\t", 2)
+        if DIGIT.search(text):
+            bad.append(f"digit in TTS line {_clip}: {text[:80]}")
     for name, text in collect():
         if EM.search(text):
             bad.append(f"em/en dash in {name}")

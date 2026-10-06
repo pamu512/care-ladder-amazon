@@ -23,7 +23,7 @@ LINES = Path(os.environ.get("LINES", ROOT / "docs/demo/vo_lines.tsv"))
 ANOOP = Path(os.environ.get("ANOOP", ROOT / "docs/demo/vo/anoop"))
 FORCE = os.environ.get("FORCE", "0") == "1"
 TAKES = max(1, int(os.environ.get("TAKES", "3")))
-ONLY = os.environ.get("LINE", "").strip()
+ONLY = [x.strip() for x in os.environ.get("LINE", "").split(",") if x.strip()]
 DEVICE = os.environ.get("DEVICE", "cpu")
 FORCE_REFS = os.environ.get("FORCE_REFS", "0") == "1"
 REFS = VO / "refs"
@@ -39,9 +39,15 @@ EMOTIONAL = {
 
 # Extra takes on the lines the review called out.
 EXTRA_TAKES = {
+    "b02": 8,
+    "b04": 8,
+    "b05": 6,
+    "b06": 6,
     "b08b": 8,
-    "b10b": 6,
-    "b11a": 6,
+    "b10b": 8,
+    "b11a": 8,
+    "b11b": 8,
+    "b14": 6,
 }
 
 VOICE = {
@@ -61,9 +67,9 @@ VOICE = {
     },
     "G": {
         "ref": REFS / "neighbor_ref.wav",
-        "exag": 0.62,
-        "cfg": 0.38,
-        "temp": 0.82,
+        "exag": 0.45,
+        "cfg": 0.45,
+        "temp": 0.80,
         "eq": "neighbor",
     },
 }
@@ -129,7 +135,19 @@ def read_lines() -> list[tuple[str, str, str]]:
 
 def split_sentences(text: str) -> list[str]:
     parts = [p.strip() for p in SENT_SPLIT.split(text) if p.strip()]
-    return parts or [text]
+    out: list[str] = []
+    for p in parts:
+        # List lines need audible commas. Generate each clause on its own.
+        if p.lower().startswith("the cue,") and p.count(",") >= 2:
+            bits = [b.strip() for b in p.split(",") if b.strip()]
+            for i, bit in enumerate(bits):
+                if i < len(bits) - 1:
+                    out.append(bit + ",")
+                else:
+                    out.append(bit if bit.endswith(".") else bit + ".")
+        else:
+            out.append(p)
+    return out or [text]
 
 
 def clip_hash(clip: str, idx: int, text: str) -> int:
@@ -393,7 +411,11 @@ def ensure_room() -> Path:
 
 
 def _norm_words(text: str) -> list[str]:
-    return WORD_RE.findall(text.lower().replace("alexa plus", "alexa plus"))
+    t = text.lower()
+    t = t.replace("kag-gull", "kaggle").replace("kag gull", "kaggle")
+    t = t.replace("two hundred and four", "two hundred four")
+    t = re.sub(r"\b204\b", "two hundred four", t)
+    return WORD_RE.findall(t)
 
 
 def word_wer(ref: str, hyp: str) -> float:
@@ -457,6 +479,65 @@ def f0_std(audio, sr: int) -> float:
     return float(np.std(voiced))
 
 
+def ending_clip_ratio(audio, sr: int) -> float:
+    """High when the last voiced word dies in a cliff (<45ms) instead of a decay."""
+    import numpy as np
+
+    if audio.size < int(sr * 0.25):
+        return 0.0
+    hop = max(1, sr // 100)
+    env = []
+    for i in range(0, audio.size, hop):
+        chunk = audio[i : i + hop]
+        env.append(float(np.sqrt(np.mean(chunk**2))) if chunk.size else 0.0)
+    peak = max(env) or 1.0
+    thr = peak * 0.08
+    last = len(env) - 1
+    while last > 0 and env[last] < thr:
+        last -= 1
+    if last < 6:
+        return 0.0
+    local = env[max(0, last - 30) : last + 1]
+    loc_peak = max(local) or 1.0
+    k = last
+    while k > 0 and env[k] < 0.45 * loc_peak:
+        k -= 1
+    decay_s = (last - k) * (hop / sr)
+    # 0.15s+ is a natural tail; 0.03s is a chopped word.
+    if decay_s >= 0.12:
+        return 0.0
+    return max(0.0, (0.12 - decay_s) / 0.12)
+
+
+def odd_stress_penalty(audio, sr: int) -> float:
+    """Punish flat reads and a last-word pitch bend."""
+    import numpy as np
+
+    try:
+        import librosa
+    except ImportError:
+        return 0.0
+    f0, _, _ = librosa.pyin(
+        audio.astype(float),
+        fmin=70,
+        fmax=360,
+        sr=sr,
+        frame_length=2048,
+    )
+    voiced = f0[~np.isnan(f0)]
+    if voiced.size < 8:
+        return -4.0
+    std = float(np.std(voiced))
+    pen = 0.0
+    if std < 8.0:
+        pen -= 6.0
+    tail = voiced[int(voiced.size * 0.75) :]
+    head = voiced[: max(1, int(voiced.size * 0.75))]
+    if tail.size and head.size and abs(float(np.mean(tail)) - float(np.mean(head))) > 55:
+        pen -= 5.0
+    return pen
+
+
 def longest_internal_silence(audio, sr: int) -> float:
     """Longest mid-utterance gap. Catches 'Are you, okay?' style bends."""
     import numpy as np
@@ -513,6 +594,11 @@ def score_take(path: Path, text: str, whisper_model=None) -> float:
     pause_pen = 0.0
     if pause > 0.22:
         pause_pen = -12.0 - (pause - 0.22) * 20.0
+    end_pen = 0.0
+    end_r = ending_clip_ratio(audio, sr)
+    if end_r > 0.22:
+        end_pen = -10.0 - (end_r - 0.22) * 25.0
+    stress_pen = odd_stress_penalty(audio, sr)
     f0 = f0_std(audio, sr)
     wer = 0.0
     if whisper_model is not None:
@@ -520,8 +606,15 @@ def score_take(path: Path, text: str, whisper_model=None) -> float:
         wer = word_wer(text, hyp)
         if wer > 0.55:
             return -1e5 + f0
-    # Prefer low WER, then high f0 variance.
-    return sanity + pause_pen + (1.0 - min(wer, 1.0)) * 20.0 + min(f0, 80.0) * 0.12
+    # Prefer low WER, then high f0 variance, intact last word.
+    return (
+        sanity
+        + pause_pen
+        + end_pen
+        + stress_pen
+        + (1.0 - min(wer, 1.0)) * 20.0
+        + min(f0, 80.0) * 0.12
+    )
 
 
 def process_wav(src: Path, dest: Path, kind: str, room: Path) -> None:
@@ -544,13 +637,9 @@ def process_wav(src: Path, dest: Path, kind: str, room: Path) -> None:
             "acompressor=threshold=-16dB:ratio=2.2:attack=8:release=80:makeup=1.5",
             "aecho=0.8:0.88:36:0.18",
         ]
-    # Edge clicks only. Do not cap internal breaths (V4: don't cut silences short).
-    filters.append(
-        "silenceremove=start_periods=1:start_threshold=-44dB:start_silence=0.08,"
-        "areverse,"
-        "silenceremove=start_periods=1:start_threshold=-44dB:start_silence=0.10,"
-        "areverse"
-    )
+    # Leading click only. Never hard-trim the last word; 150ms tail fade.
+    filters.append("silenceremove=start_periods=1:start_threshold=-44dB:start_silence=0.08")
+    filters.append("areverse,afade=t=in:d=0.15,areverse")
     chain = ",".join(filters)
     tmp = dest.with_suffix(".proc.wav")
     run(
@@ -688,7 +777,7 @@ def reprocess_concats(room: Path) -> None:
         dest = VO / f"{clip}.wav"
         if not raw.is_file():
             continue
-        if ONLY and clip != ONLY:
+        if ONLY and clip not in ONLY:
             continue
         process_wav(raw, dest, VOICE[speaker]["eq"], room)
         print("reprocessed", dest, f"{wav_duration(dest):.2f}s")
@@ -704,11 +793,57 @@ def load_whisper():
     return whisper.load_model("tiny.en", device="cpu")
 
 
+def audit_narrator() -> int:
+    """Score current narrator sentence takes: clipped endings + odd stress."""
+    stored = load_seeds()
+    rows = []
+    for clip, speaker, text in read_lines():
+        if speaker != "N":
+            continue
+        for idx, sent in enumerate(split_sentences(text)):
+            seed = stored.get((clip, idx))
+            take = TAKES_DIR / f"{clip}_s{idx}_{seed}.wav" if seed is not None else None
+            if take is None or not take.is_file():
+                dest = VO / f"{clip}.wav"
+                if not dest.is_file():
+                    continue
+                take = dest
+            audio, sr = _load_audio(take)
+            end_r = ending_clip_ratio(audio, sr)
+            stress = odd_stress_penalty(audio, sr)
+            f0 = f0_std(audio, sr)
+            # Higher bad = worse
+            bad = end_r * 12.0 - stress - min(f0, 40.0) * 0.05
+            rows.append((bad, end_r, f0, stress, clip, idx, sent, take.name))
+    rows.sort(reverse=True)
+    print("# worst narrator takes (clipped ending / odd stress)")
+    print("# rank\tclip\tsent\tend_ratio\tf0_std\tstress\ttext")
+    for i, (bad, end_r, f0, stress, clip, idx, sent, name) in enumerate(rows[:12], 1):
+        print(f"{i}\t{clip}\t{idx}\t{end_r:.3f}\t{f0:.2f}\t{stress:.1f}\t{sent[:70]}\t{name}")
+    dest = VO / "narrator_audit.tsv"
+    lines = ["# rank\tclip\tsent_idx\tend_ratio\tf0_std\tstress\tbad\ttext"]
+    for i, (bad, end_r, f0, stress, clip, idx, sent, _n) in enumerate(rows, 1):
+        lines.append(
+            f"{i}\t{clip}\t{idx}\t{end_r:.3f}\t{f0:.2f}\t{stress:.1f}\t{bad:.3f}\t{sent}"
+        )
+    dest.write_text("\n".join(lines) + "\n")
+    print("wrote", dest)
+    worst = [r[4] for r in rows[:5]]
+    print("WORST5_CLIPS", ",".join(dict.fromkeys(worst)))
+    return 0
+
+
 def selfcheck() -> int:
-    assert abs(word_wer("Are you okay?", "Are you okay?") ) < 1e-9
+    assert abs(word_wer("Are you okay?", "Are you okay?")) < 1e-9
     assert word_wer("Are you okay?", "Are you, okay?") < 0.2
     assert word_wer("I'm going.", "I am leaving now.") > 0.4
+    assert word_wer("Kag-gull dataset", "Kaggle dataset") == 0.0
+    bits = split_sentences("The cue, the time, how long ago, any missed check-ins.")
+    assert bits[0] == "The cue," and bits[1] == "the time,"
     assert 0.20 <= gap_after("b03", 0, "x", 2) <= 0.35
+    for _clip, _sp, text in read_lines():
+        if re.search(r"\d", text):
+            raise AssertionError(f"digit in TTS line: {text}")
     print("SELFCHECK OK")
     return 0
 
@@ -716,6 +851,8 @@ def selfcheck() -> int:
 def main() -> int:
     if len(sys.argv) > 1 and sys.argv[1] == "--selfcheck":
         return selfcheck()
+    if len(sys.argv) > 1 and sys.argv[1] == "--audit-narrator":
+        return audit_narrator()
     if not LINES.is_file():
         print(f"missing {LINES}", file=sys.stderr)
         return 2
@@ -731,10 +868,11 @@ def main() -> int:
 
     rows = read_lines()
     if ONLY:
-        rows = [r for r in rows if r[0] == ONLY]
-        if not rows:
-            print(f"unknown LINE={ONLY}", file=sys.stderr)
+        unknown = [c for c in ONLY if c not in {r[0] for r in read_lines()}]
+        if unknown:
+            print(f"unknown LINE={unknown}", file=sys.stderr)
             return 2
+        rows = [r for r in rows if r[0] in ONLY]
 
     stored = load_seeds()
     seed_out: list[tuple[str, int, int, str, float, float, float, int]] = []
@@ -744,7 +882,7 @@ def main() -> int:
             if not raw.strip() or raw.startswith("#"):
                 continue
             parts = raw.split("\t")
-            if parts[0] == ONLY:
+            if parts[0] in ONLY:
                 continue
             timing_out.append((parts[0], int(parts[1]), float(parts[2]), int(parts[3])))
     if SEEDS.is_file():
@@ -752,7 +890,7 @@ def main() -> int:
             if not raw.strip() or raw.startswith("#"):
                 continue
             parts = raw.split("\t")
-            if ONLY and parts[0] == ONLY:
+            if ONLY and parts[0] in ONLY:
                 continue
             if not ONLY and FORCE:
                 continue
@@ -806,7 +944,7 @@ def main() -> int:
         assembled: list[tuple[Path, float]] = []
         for idx, sent in enumerate(sentences):
             emotion = sent in EMOTIONAL
-            if stored.get((clip, idx)) is not None and not FORCE:
+            if stored.get((clip, idx)) is not None and not FORCE and not ONLY:
                 seeds = [stored[(clip, idx)]]
             else:
                 seeds = candidate_seeds(clip, idx, sent)
