@@ -1,50 +1,50 @@
 # clip	sent_idx	seed	text	exag	cfg	temp	emotion
-b01	0	680103	My mum lives alone in India.	0.45	0.35	0.80	0
-b01	1	900614	I'm in Hong Kong.	0.45	0.35	0.80	0
-b01	2	935348	My sister is in Europe.	0.45	0.35	0.80	0
-b01	3	750304	And my mum said no to a caretaker.	0.60	0.30	0.80	1
-b02	0	288704	Her phone is often dead.	0.45	0.35	0.80	0
-b02	1	27187	We tried a camera, and she hated being watched.	0.45	0.35	0.80	0
-b02	2	115473	And none of us can watch a feed all day from across the world.	0.45	0.35	0.80	0
-b03	0	121443	So I built Care Ladder.	0.45	0.35	0.80	0
-b03	1	164044	Alexa Plus checks in by voice, wherever she is in the house, so it works even when her phone is dead.	0.45	0.35	0.80	0
-b03	2	107411	Then it makes sure someone in the family actually answers.	0.45	0.35	0.80	0
-b04	0	338565	My family sets the order.	0.45	0.35	0.80	0
-b04	1	703509	Me, my wife, my sister, then our neighbor, who lives in the same city and can walk over.	0.45	0.35	0.80	0
-b04	2	719071	Each person gets a gentle re-prompt, then the ladder moves on.	0.45	0.35	0.80	0
-b05	0	168391	A camera cue or a missed routine starts the ladder.	0.45	0.35	0.80	0
-b05	1	573503	The camera only acts on cues, so nobody watches a feed.	0.45	0.35	0.80	0
-b05	2	426836	The model was trained on a public Kaggle dataset.	0.45	0.35	0.80	0
-b06	0	71104	Here's the alert on my phone, through Alexa Plus.	0.45	0.35	0.80	0
-b06	1	457875	It tells me why.	0.45	0.35	0.80	0
-b06	2	845985	The cue, the time, how long ago, any missed check-ins.	0.45	0.35	0.80	0
-b06	3	872528	The buttons on screen match what I can say.	0.45	0.35	0.80	0
-b07a	0	417258	Alexa, call my sister instead.	0.45	0.35	0.80	0
-b07b	0	416217	I'm stuck in a meeting, so I pass it to my sister.	0.45	0.35	0.80	0
-b08a	0	834616	My sister doesn't answer.	0.45	0.35	0.80	0
-b08a	1	211377	So Alexa Plus does two things at once.	0.45	0.35	0.80	0
-b08a	2	674790	It asks me what to do next.	0.45	0.35	0.80	0
-b08b	0	366791	Are you okay?	0.30	0.50	0.60	0
-b08c	0	480079	And it asks Mum.	0.45	0.35	0.80	0
-b08c	1	493211	Whatever she says, okay, needs help, or nothing, comes straight back to me.	0.45	0.35	0.80	0
-b09	0	327994	Try someone else.	0.45	0.35	0.80	0
-b10a	0	375630	Our neighbor gets the alert, and it says why.	0.45	0.35	0.80	0
-b10a	1	423490	What happened, when, and who already didn't respond.	0.45	0.35	0.80	0
-b10a	2	554961	So it doesn't look like a false alarm.	0.45	0.35	0.80	0
-b10b	0	920402	I'm going.	0.55	0.40	0.85	0
-b11a	0	676444	She's okay.	0.55	0.40	0.85	0
-b11b	0	301216	That comes straight back to me.	0.45	0.35	0.80	0
-b11b	1	337362	Later I can ask Alexa, how is Mum, and hear the last cue, the last acknowledgment, and whether it's been quiet since.	0.45	0.35	0.80	0
-b12	0	64848	Care Ladder also learns her day.	0.45	0.35	0.80	0
-b12	1	242636	After three repeating windows, it suggests a routine for us to confirm.	0.45	0.35	0.80	0
-b12	2	914782	If she misses one, it escalates softly.	0.45	0.35	0.80	0
-b12	3	935544	And if her schedule changes, everyone on the ladder hears about it.	0.45	0.35	0.80	0
-b13	0	532511	On Fire TV, there's a calm, ten-foot view of how things are.	0.45	0.35	0.80	0
-b14	0	235465	Alexa Plus talks to my own M C P server.	0.45	0.35	0.80	0
-b14	1	705508	It runs on AWS, with Python and OpenCV.	0.45	0.35	0.80	0
-b14	2	919660	It isn't a published skill yet, and much of the Alexa side runs in a simulator, but a real Alexa alert did reach my phone.	0.45	0.35	0.80	0
-b14	3	439279	204 tests pass, and it's open source.	0.45	0.35	0.80	0
-b15	0	354786	Care Ladder is for families who live far from someone who lives alone.	0.60	0.30	0.80	1
-b15	1	809222	Alexa Plus is primary.	0.45	0.35	0.80	0
-b15	2	782827	Fire TV is supporting.	0.45	0.35	0.80	0
-b15	3	793517	This is not a medical device.	0.45	0.35	0.80	0
+b01	0	690076	My mum lives alone in India.	0.55	0.38	0.80	0
+b01	1	900614	I'm in Hong Kong.	0.55	0.38	0.80	0
+b01	2	935348	My sister is in Europe.	0.55	0.38	0.80	0
+b01	3	760277	And my mum said no to a caretaker.	0.62	0.32	0.80	1
+b02	0	288704	Her phone is often dead.	0.55	0.38	0.80	0
+b02	1	47133	We tried a camera, and she hated being watched.	0.55	0.38	0.80	0
+b02	2	115473	And none of us can watch a feed all day from across the world.	0.55	0.38	0.80	0
+b03	0	111470	So I built Care Ladder.	0.55	0.38	0.80	0
+b03	1	164044	Alexa Plus checks in by voice, wherever she is in the house, so it works even when her phone is dead.	0.55	0.38	0.80	0
+b03	2	107411	Then it makes sure someone in the family actually answers.	0.55	0.38	0.80	0
+b04	0	328592	My family sets the order.	0.55	0.38	0.80	0
+b04	1	713482	Me, my wife, my sister, then our neighbor, who lives in the same city and can walk over.	0.55	0.38	0.80	0
+b04	2	739017	Each person gets a gentle re-prompt, then the ladder moves on.	0.55	0.38	0.80	0
+b05	0	188337	A camera cue or a missed routine starts the ladder.	0.55	0.38	0.80	0
+b05	1	583476	The camera only acts on cues, so nobody watches a feed.	0.55	0.38	0.80	0
+b05	2	436809	The model was trained on a public Kaggle dataset.	0.55	0.38	0.80	0
+b06	0	71104	Here's the alert on my phone, through Alexa Plus.	0.55	0.38	0.80	0
+b06	1	447902	It tells me why.	0.55	0.38	0.80	0
+b06	2	845985	The cue, the time, how long ago, any missed check-ins.	0.55	0.38	0.80	0
+b06	3	872528	The buttons on screen match what I can say.	0.55	0.38	0.80	0
+b07a	0	407285	Alexa, call my sister instead.	0.55	0.38	0.80	0
+b07b	0	406244	I'm stuck in a meeting, so I pass it to my sister.	0.55	0.38	0.80	0
+b08a	0	834616	My sister doesn't answer.	0.55	0.38	0.80	0
+b08a	1	191431	So Alexa Plus does two things at once.	0.55	0.38	0.80	0
+b08a	2	674790	It asks me what to do next.	0.55	0.38	0.80	0
+b08b	0	386737	Are you okay?	0.30	0.50	0.60	0
+b08c	0	480079	And it asks Mum.	0.55	0.38	0.80	0
+b08c	1	493211	Whatever she says, okay, needs help, or nothing, comes straight back to me.	0.55	0.38	0.80	0
+b09	0	327994	Try someone else.	0.55	0.38	0.80	0
+b10a	0	375630	Our neighbor gets the alert, and it says why.	0.55	0.38	0.80	0
+b10a	1	423490	What happened, when, and who already didn't respond.	0.55	0.38	0.80	0
+b10a	2	554961	So it doesn't look like a false alarm.	0.55	0.38	0.80	0
+b10b	0	950321	I'm going.	0.62	0.38	0.82	0
+b11a	0	686417	She's okay.	0.62	0.38	0.82	0
+b11b	0	321162	That comes straight back to me.	0.55	0.38	0.80	0
+b11b	1	347335	Later I can ask Alexa, how is Mum, and hear the last cue, the last acknowledgment, and whether it's been quiet since.	0.55	0.38	0.80	0
+b12	0	44902	Care Ladder also learns her day.	0.55	0.38	0.80	0
+b12	1	242636	After three repeating windows, it suggests a routine for us to confirm.	0.55	0.38	0.80	0
+b12	2	904809	If she misses one, it escalates softly.	0.55	0.38	0.80	0
+b12	3	945517	And if her schedule changes, everyone on the ladder hears about it.	0.55	0.38	0.80	0
+b13	0	552457	On Fire TV, there's a calm, ten-foot view of how things are.	0.55	0.38	0.80	0
+b14	0	235465	Alexa Plus talks to my own M C P server.	0.55	0.38	0.80	0
+b14	1	685562	It runs on AWS, with Python and OpenCV.	0.55	0.38	0.80	0
+b14	2	919660	It isn't a published skill yet, and much of the Alexa side runs in a simulator, but a real Alexa alert did reach my phone.	0.55	0.38	0.80	0
+b14	3	439279	204 tests pass, and it's open source.	0.55	0.38	0.80	0
+b15	0	354786	Care Ladder is for families who live far from someone who lives alone.	0.62	0.32	0.80	1
+b15	1	809222	Alexa Plus is primary.	0.55	0.38	0.80	0
+b15	2	772854	Fire TV is supporting.	0.55	0.38	0.80	0
+b15	3	793517	This is not a medical device.	0.55	0.38	0.80	0
