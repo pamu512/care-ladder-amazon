@@ -158,9 +158,15 @@ def ensure_refs() -> None:
     REFS.mkdir(parents=True, exist_ok=True)
     for name, (voice, rate, text) in REF_PROMPTS.items():
         dest = REFS / name
-        if dest.is_file() and not FORCE:
-            continue
+        if dest.is_file() and dest.stat().st_size > 1000:
+            # keep a valid ref even under FORCE=1; refs are prompts, not takes
+            try:
+                wav_duration(dest)
+                continue
+            except Exception:
+                dest.unlink(missing_ok=True)
         print("ref", dest.name, voice)
+        raw = dest.with_suffix(".edge.mp3")
         run(
             [
                 sys.executable,
@@ -168,14 +174,29 @@ def ensure_refs() -> None:
                 "edge_tts",
                 "--voice",
                 voice,
-                "--rate",
-                rate,
+                f"--rate={rate}",
                 "--text",
                 text,
                 "--write-media",
+                str(raw),
+            ]
+        )
+        run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(raw),
+                "-ac",
+                "1",
+                "-ar",
+                "24000",
+                "-f",
+                "wav",
                 str(dest),
             ]
         )
+        raw.unlink(missing_ok=True)
         # keep 10 to 20s; pad if short
         dur = wav_duration(dest)
         if dur < 10.0:
@@ -216,7 +237,7 @@ def ensure_refs() -> None:
 def ensure_music() -> Path:
     """Original soft piano-like bed. No third-party sample."""
     dest = VO / "music.wav"
-    if dest.is_file() and not FORCE:
+    if dest.is_file() and dest.stat().st_size > 1000:
         return dest
     print("music", dest)
     # pentatonic-ish A minor arpeggio, low, looping 48s
@@ -224,15 +245,10 @@ def ensure_music() -> Path:
         [
             "ffmpeg",
             "-y",
-            "-f",
-            "lavfi",
-            "-i",
-            (
-                "sine=frequency=220:duration=48,"
-                "sine=frequency=261.63:duration=48,"
-                "sine=frequency=329.63:duration=48,"
-                "sine=frequency=440:duration=48"
-            ),
+            "-f", "lavfi", "-i", "sine=frequency=220:duration=48",
+            "-f", "lavfi", "-i", "sine=frequency=261.63:duration=48",
+            "-f", "lavfi", "-i", "sine=frequency=329.63:duration=48",
+            "-f", "lavfi", "-i", "sine=frequency=440:duration=48",
             "-filter_complex",
             (
                 "[0]volume=0.09,lowpass=f=1200[a];"
@@ -247,16 +263,14 @@ def ensure_music() -> Path:
             "-ar",
             "44100",
             str(dest),
-        ],
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        ]
     )
     return dest
 
 
 def ensure_room() -> Path:
     dest = VO / "roomtone.wav"
-    if dest.is_file() and not FORCE:
+    if dest.is_file() and dest.stat().st_size > 1000:
         return dest
     print("roomtone", dest)
     run(
@@ -521,7 +535,12 @@ def main() -> int:
     model = None
     if need_tts:
         print(f"loading ChatterboxTTS device={DEVICE}")
+        import perth
         from chatterbox.tts import ChatterboxTTS
+
+        # perth-net import fails without pkg_resources; DummyWatermarker is a no-op.
+        if getattr(perth, "PerthImplicitWatermarker", None) is None:
+            perth.PerthImplicitWatermarker = perth.DummyWatermarker
 
         model = ChatterboxTTS.from_pretrained(device=DEVICE)
 
