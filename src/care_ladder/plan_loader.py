@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from care_ladder.models import CarePlan, Contact
+from care_ladder.models import CarePlan, Contact, RosterEntry
 
 # NANP fiction: NPA-555-01XX (e.g. +12125550101). Also allow bare 555-01XX local form.
 _RESERVED_NANP_555_01XX = re.compile(r"^\+1\d{3}55501\d{2}$")
@@ -39,6 +39,9 @@ def validate_demo_phones(plan: CarePlan) -> None:
     contacts: list[Contact] = [plan.caregiver, plan.monitored]
     if plan.secondary is not None:
         contacts.append(plan.secondary)
+    for entry in plan.roster:
+        if entry.phone_e164:
+            contacts.append(Contact(display_name=entry.name, phone_e164=entry.phone_e164))
 
     for contact in contacts:
         phone = contact.phone_e164
@@ -68,3 +71,13 @@ def load_care_plan(path: Path, *, env: str | None = None) -> CarePlan:
     if mode == "demo":
         validate_demo_phones(plan)
     return plan
+
+
+def effective_roster(plan: CarePlan) -> list[RosterEntry]:
+    """Configured ladder, or caregiver + secondary when roster is omitted."""
+    if plan.roster:
+        return list(plan.roster)
+    out = [RosterEntry(name=plan.caregiver.display_name, relationship="primary")]
+    if plan.secondary is not None:
+        out.append(RosterEntry(name=plan.secondary.display_name, relationship="secondary"))
+    return out

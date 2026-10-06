@@ -1,9 +1,9 @@
 """Channel-agnostic care conversation FSM (Alexa-session beats, no chat adapters).
 
 States: idle → speaker_window → family_paged → pressure → calling_1 → calling_2 → closed
-Plus deepen: snoozed, deferred, defer_failed, soft_reprompt, soft_next.
-Resident clear_ok closes from speaker_window without paging family.
-ANY caregiver ack stops escalation; outcome closes with documentation.
+Plus deepen: snoozed, deferred, defer_failed, soft_reprompt, soft_next, ladder_exhausted.
+Soft timers walk a user-configured roster. Last-rung silence asks the primary
+and checks the monitored person in parallel. Never auto-dials.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, ClassVar, Literal
 
 from care_ladder.channels.response_intent import classify_response_intent
-from care_ladder.models import AuditEvent
+from care_ladder.models import AuditEvent, RosterEntry
 
 CareState = Literal[
     "idle",
@@ -26,6 +26,7 @@ CareState = Literal[
     "defer_failed",
     "soft_reprompt",
     "soft_next",
+    "ladder_exhausted",
     "closed",
 ]
 
@@ -62,6 +63,7 @@ _OPEN_STATES = frozenset(
         "defer_failed",
         "soft_reprompt",
         "soft_next",
+        "ladder_exhausted",
     }
 )
 _PAGEABLE = frozenset(
@@ -74,8 +76,10 @@ _PAGEABLE = frozenset(
         "soft_next",
         "deferred",
         "defer_failed",
+        "ladder_exhausted",
     }
 )
+_ASK_PRIMARY = frozenset({"defer_failed", "ladder_exhausted"})
 _SOFT_HOLD = frozenset({"soft_reprompt", "soft_next"})
 
 
@@ -113,9 +117,21 @@ class CareConversation:
         household_id: str,
         *,
         next_contact: str = "Secondary contact",
+        roster: list[RosterEntry] | None = None,
     ) -> None:
         self.household_id = household_id
         self.next_contact = next_contact
+        self.roster: list[RosterEntry] = (
+            list(roster)
+            if roster
+            else [
+                RosterEntry(name="Primary contact", relationship="primary"),
+                RosterEntry(name=next_contact, relationship="secondary"),
+            ]
+        )
+        self.roster_index: int = 0
+        self.already_tried: list[dict[str, Any]] = []
+        self.missed_checkins: int = 0
         self.state: CareState = "idle"
         self.incident_id: str | None = None
         self.owner: str | None = None
@@ -139,6 +155,119 @@ class CareConversation:
         self.last_ack: dict[str, Any] | None = None
         self.quiet_since: datetime | None = None
         self._events: list[AuditEvent] = []
+        self._sync_next_contact()
+
+    @property
+    def current_entry(self) -> RosterEntry:
+        if not self.roster:
+            return RosterEntry(name="Primary contact", relationship="primary")
+        idx = min(max(self.roster_index, 0), len(self.roster) - 1)
+        return self.roster[idx]
+
+    @property
+    def next_entry(self) -> RosterEntry | None:
+        nxt = self.roster_index + 1
+        if 0 <= nxt < len(self.roster):
+            return self.roster[nxt]
+        return None
+
+    def _sync_next_contact(self) -> None:
+        nxt = self.next_entry
+        if nxt is not None:
+            self.next_contact = nxt.name
+        elif self.roster:
+            self.next_contact = self.current_entry.name
+
+    def _entry_for(self, name: str) -> RosterEntry | None:
+        key = (name or "").strip().casefold()
+        if not key:
+            return None
+        for entry in self.roster:
+            if entry.name.casefold() == key:
+                return entry
+        return None
+
+    def _is_local(self, name: str) -> bool:
+        entry = self._entry_for(name)
+        return bool(entry and entry.local_responder)
+
+    def evidence_payload(self, now: datetime | None = None) -> dict[str, Any]:
+        clock = now or datetime.now(timezone.utc)
+        cue_at = None
+        if self.last_cue and self.last_cue.get("at"):
+            cue_at = self.last_cue["at"]
+        if not isinstance(cue_at, datetime):
+            cue_at = clock
+        if cue_at.tzinfo is None:
+            cue_at = cue_at.replace(tzinfo=timezone.utc)
+        elapsed = int((clock - cue_at).total_seconds())
+        current = self.current_entry
+        return {
+            "cue_kind": self.cue_kind,
+            "cue_at": cue_at.isoformat(),
+            "time_since_cue_sec": max(0, elapsed),
+            "missed_checkins": self.missed_checkins,
+            "already_tried": list(self.already_tried),
+            "current": {
+                "name": current.name,
+                "relationship": current.relationship,
+                "local_responder": current.local_responder,
+            },
+            "basis_for_concern": True,
+        }
+
+    def _alert_copy(self, now: datetime | None = None) -> str:
+        ev = self.evidence_payload(now)
+        tried = ", ".join(t.get("name", "") for t in ev["already_tried"] if t.get("name"))
+        tried_s = tried or "nobody yet"
+        when = ev["cue_at"]
+        phrase = (
+            f"Care Ladder has a basis for concern. What: {ev['cue_kind']}. "
+            f"When: {when}. Time since cue: {ev['time_since_cue_sec']} seconds. "
+            f"Missed check-ins: {ev['missed_checkins']}. "
+            f"Already tried with no response: {tried_s}."
+        )
+        current = self.current_entry
+        if current.local_responder:
+            phrase += (
+                f" {current.name} is the local in-person check "
+                f"({current.relationship or 'neighbor'}). "
+                "This is not a medical device and not a phone call."
+            )
+        return phrase
+
+    def _page_current(self, now: datetime, *, reason: str) -> CareState:
+        self.family_paged_at = now
+        self.soft_reprompt_at = None
+        self.state = "family_paged"
+        ev = self.evidence_payload(now)
+        phrase = self._alert_copy(now)
+        current = self.current_entry
+        self.inform_card = inform_card(
+            self.blurred_frame_ref or "last-frame-placeholder",
+            self.cue_text or "Care Ladder check-in",
+            self.countdown_sec,
+            next_contact=self.next_contact,
+        )
+        self.inform_card["evidence"] = ev
+        self.inform_card["phrase"] = phrase
+        self.inform_card["local_responder"] = current.local_responder
+        if current.local_responder:
+            self.inform_card["basis_for_concern"] = phrase
+        self._refresh_apl(int(ev["time_since_cue_sec"]))
+        self._append(
+            "family_paged",
+            {
+                "reason": reason,
+                "inform_card": self.inform_card,
+                "evidence": ev,
+                "contact": current.model_dump(),
+                "phrase": phrase,
+                "fsm_state": self.state,
+                "at": now.isoformat(),
+            },
+        )
+        return self.state
 
     @classmethod
     def for_household(cls, household_id: str, **kwargs: Any) -> CareConversation:
@@ -162,6 +291,7 @@ class CareConversation:
         incident_id: str,
         cue_kind: str,
         cue_text: str = "",
+        now: datetime | None = None,
     ) -> CareState:
         if self.state in _OPEN_STATES:
             return self.state
@@ -171,7 +301,7 @@ class CareConversation:
         self.last_cue = {
             "kind": cue_kind,
             "text": cue_text,
-            "at": datetime.now(timezone.utc),
+            "at": now or datetime.now(timezone.utc),
         }
         self.state = "speaker_window"
         self.quiet_since = None
@@ -224,23 +354,8 @@ class CareConversation:
         self.blurred_frame_ref = blurred_frame_ref
         self.cue_text = cue_text
         self.countdown_sec = countdown_sec
-        self.inform_card = inform_card(
-            blurred_frame_ref,
-            cue_text,
-            countdown_sec,
-            next_contact=self.next_contact,
-        )
-        self._refresh_apl(0)
-        self.family_paged_at = clock
-        self.state = "family_paged"
-        self._append(
-            "family_paged",
-            {
-                "reason": reason,
-                "inform_card": self.inform_card,
-                "fsm_state": self.state,
-            },
-        )
+        self.missed_checkins += 1
+        self._page_current(clock, reason=reason)
         from care_ladder.channels.proactive_events import (
             proactive_enabled,
             send_awareness_chime,
@@ -273,12 +388,12 @@ class CareConversation:
     def start_call(self, n: int) -> CareState:
         if self.escalation_stopped or self.state == "closed":
             return self.state
-        if self.state in _SOFT_HOLD | {"deferred", "defer_failed", "snoozed"}:
+        if self.state in _SOFT_HOLD | {"deferred", "defer_failed", "snoozed", "ladder_exhausted"}:
             return self.state
         if n not in {1, 2}:
             return self.state
         target: CareState = "calling_1" if n == 1 else "calling_2"
-        if n == 1 and self.state not in {"family_paged", "pressure"}:
+        if n == 1 and self.state != "pressure":
             return self.state
         if n == 2 and self.state != "calling_1":
             return self.state
@@ -478,6 +593,7 @@ class CareConversation:
                     "to": name,
                     "household_id": self.household_id,
                     "cue_text": self.cue_text,
+                    "evidence": self.evidence_payload(clock),
                     "context": (
                         f"{self.household_id}: {self.cue_text or self.cue_kind}. "
                         f"Asked to take this instead of {by}."
@@ -519,6 +635,7 @@ class CareConversation:
                 "monitored_report": token,
                 "deferred_to": self.deferred_to,
                 "direction_actions": list(DIRECTION_ACTIONS),
+                "evidence": self.evidence_payload(now),
                 "at": now.isoformat(),
                 "fsm_state": self.state,
                 "phrase": (
@@ -530,27 +647,60 @@ class CareConversation:
         )
         return self.state
 
+    def _enter_exhausted(self, now: datetime, monitored_raw: str) -> CareState:
+        self.state = "ladder_exhausted"
+        token = self.record_monitored_checkin(monitored_raw)
+        self._append(
+            "ladder_exhausted",
+            {
+                "ask_primary": True,
+                "parallel_checkin": True,
+                "monitored_report": token,
+                "tried": list(self.already_tried),
+                "direction_actions": list(DIRECTION_ACTIONS),
+                "evidence": self.evidence_payload(now),
+                "at": now.isoformat(),
+                "fsm_state": self.state,
+                "phrase": (
+                    "Nobody on the ladder responded. "
+                    f"Monitored report: {token}. "
+                    "What should I do: try someone else, try them again, say you are "
+                    "on the way, mark a false alarm, or snooze?"
+                ),
+            },
+        )
+        return self.state
+
     def tick(self, now: datetime, *, monitored_raw: str | None = None) -> CareState:
         if self.escalation_stopped or self.state == "closed":
             return self.state
-        if self.state == "snoozed" and self.snooze_until is not None:
-            if now >= self.snooze_until:
-                return self._repage(now, reason="snooze_elapsed")
-            return self.state
-        if self.state == "deferred" and self.defer_deadline is not None:
-            if now >= self.defer_deadline:
-                raw = "" if monitored_raw is None else monitored_raw
-                return self._enter_defer_failed(now, raw)
-            return self.state
-        if self.state == "family_paged" and self.family_paged_at is not None:
-            elapsed = (now - self.family_paged_at).total_seconds()
-            if elapsed >= T_REPROMPT:
-                return self._soft_reprompt(now)
-            return self.state
-        if self.state == "soft_reprompt" and self.soft_reprompt_at is not None:
-            elapsed = (now - self.soft_reprompt_at).total_seconds()
-            if elapsed >= T_NEXT:
-                return self._soft_next(now)
+        raw = "" if monitored_raw is None else monitored_raw
+        # ponytail: bounded catch-up so one far-future tick walks remaining rungs
+        # at each deadline; upgrade if timers ever need real preemption.
+        for _ in range(32):
+            if self.escalation_stopped or self.state == "closed":
+                return self.state
+            if self.state == "snoozed" and self.snooze_until is not None:
+                if now >= self.snooze_until:
+                    self._repage(self.snooze_until, reason="snooze_elapsed")
+                    continue
+                return self.state
+            if self.state == "deferred" and self.defer_deadline is not None:
+                if now >= self.defer_deadline:
+                    return self._enter_defer_failed(self.defer_deadline, raw)
+                return self.state
+            if self.state == "family_paged" and self.family_paged_at is not None:
+                due = self.family_paged_at + timedelta(seconds=T_REPROMPT)
+                if now >= due:
+                    self._soft_reprompt(due)
+                    continue
+                return self.state
+            if self.state == "soft_reprompt" and self.soft_reprompt_at is not None:
+                due = self.soft_reprompt_at + timedelta(seconds=T_NEXT)
+                if now >= due:
+                    self._soft_next(due, monitored_raw=raw)
+                    continue
+                return self.state
             return self.state
         return self.state
 
@@ -563,50 +713,114 @@ class CareConversation:
             {
                 "phrase": phrase,
                 "louder": True,
+                "evidence": self.evidence_payload(now),
+                "contact": self.current_entry.model_dump(),
                 "fsm_state": self.state,
                 "at": now.isoformat(),
             },
         )
         return self.state
 
-    def _soft_next(self, now: datetime) -> CareState:
-        self.state = "soft_next"
+    def _soft_next(self, now: datetime, *, monitored_raw: str = "") -> CareState:
+        current = self.current_entry
+        self.already_tried.append(
+            {
+                "name": current.name,
+                "relationship": current.relationship,
+                "local_responder": current.local_responder,
+                "result": "no_response",
+            }
+        )
+        self.missed_checkins += 1
+        nxt = self.next_entry
+        if nxt is None:
+            phrase = (
+                f"No reply from {current.name}. The ladder is exhausted. "
+                "This is not a phone call."
+            )
+            self.state = "soft_next"
+            self._append(
+                "soft_next",
+                {
+                    "phrase": phrase,
+                    "next_contact": None,
+                    "current_contact": current.name,
+                    "dial": False,
+                    "evidence": self.evidence_payload(now),
+                    "fsm_state": self.state,
+                    "at": now.isoformat(),
+                },
+            )
+            return self._enter_exhausted(now, monitored_raw)
         phrase = (
-            f"No reply from Primary contact. Notifying {self.next_contact}. "
+            f"No reply from {current.name}. Notifying {nxt.name}. "
             "This is not a phone call."
         )
+        self.state = "soft_next"
         self._append(
             "soft_next",
             {
                 "phrase": phrase,
-                "next_contact": self.next_contact,
+                "next_contact": nxt.name,
+                "current_contact": current.name,
                 "dial": False,
+                "evidence": self.evidence_payload(now),
                 "fsm_state": self.state,
                 "at": now.isoformat(),
             },
         )
-        return self.state
+        self.roster_index += 1
+        self._sync_next_contact()
+        return self._page_current(now, reason="soft_next")
 
     def _repage(self, now: datetime, *, reason: str) -> CareState:
-        self.state = "family_paged"
-        self.family_paged_at = now
-        self.soft_reprompt_at = None
-        self.inform_card = inform_card(
-            self.blurred_frame_ref or "last-frame-placeholder",
-            self.cue_text or "Care Ladder check-in",
-            self.countdown_sec,
-            next_contact=self.next_contact,
-        )
-        self._refresh_apl(0)
+        return self._page_current(now, reason=reason)
+
+    def local_going(self, by: str, raw: str = "") -> CareState:
+        state = self.on_my_way(by=by, raw=raw)
+        if self.escalation_stopped and self.owner == by:
+            self._append(
+                "local_going",
+                {
+                    "by": by,
+                    "raw": raw,
+                    "ask_outcome": True,
+                    "local_responder": True,
+                    "evidence": self.evidence_payload(),
+                    "fsm_state": self.state,
+                },
+            )
+        return state
+
+    def report_local_outcome(self, raw: str, by: str) -> CareState:
+        from care_ladder.channels.caregiver_intent import classify_local_outcome
+
+        token = classify_local_outcome(raw)
+        primary = self.roster[0].name if self.roster else "Primary contact"
+        if token == "okay":
+            summary = "resident is okay."
+        elif token == "needs_help":
+            summary = "resident needs help."
+        else:
+            summary = "outcome unclear."
+        phrase = f"{by} checked in person. Report for {primary}: {summary}"
         self._append(
-            "family_paged",
+            "primary_report",
             {
-                "reason": reason,
-                "inform_card": self.inform_card,
+                "from": by,
+                "to": primary,
+                "role": "local_responder",
+                "outcome": token,
+                "raw": raw,
+                "phrase": phrase,
+                "ask_primary": token == "needs_help",
                 "fsm_state": self.state,
-                "at": now.isoformat(),
             },
         )
+        if token == "okay":
+            if not self.escalation_stopped:
+                self.on_my_way(by=by, raw=raw)
+            return self.record_outcome(raw)
         return self.state
 
     def primary_direction(
@@ -618,11 +832,12 @@ class CareConversation:
         raw: str = "",
         now: datetime | None = None,
     ) -> CareState:
-        if self.state != "defer_failed":
+        if self.state not in _ASK_PRIMARY:
             return self.state
         clock = now or datetime.now(timezone.utc)
         if intent == "try_again":
-            target = self.deferred_to or alternate or self.next_contact
+            last = self.already_tried[-1]["name"] if self.already_tried else None
+            target = self.deferred_to or alternate or last or self.next_contact
             return self.defer(target, by=by, raw=raw, now=clock)
         if intent == "try_other":
             target = alternate or self.next_contact
@@ -669,13 +884,16 @@ def ensure_family_paged(
     cue_text: str,
     countdown_sec: int = 180,
     next_contact: str = "Secondary contact",
+    roster: list[RosterEntry] | None = None,
     now: datetime | None = None,
 ) -> CareConversation:
     """Open or join the household thread and page Alexa mobile if needed."""
-    conv = CareConversation.for_household(household_id, next_contact=next_contact)
+    conv = CareConversation.for_household(
+        household_id, next_contact=next_contact, roster=roster
+    )
     if conv.state == "idle":
         conv.start_speaker(
-            incident_id=incident_id, cue_kind=cue_kind, cue_text=cue_text
+            incident_id=incident_id, cue_kind=cue_kind, cue_text=cue_text, now=now
         )
     if conv.state == "speaker_window":
         conv.expire_to_family_paged(
@@ -714,14 +932,20 @@ def apply_caregiver_intent(
 ) -> CareState:
     """Dispatch a classified caregiver intent onto the conversation."""
     clock = now or datetime.now(timezone.utc)
-    if conv.state == "defer_failed" and intent in DIRECTION_ACTIONS:
+    if conv.state in _ASK_PRIMARY and intent in DIRECTION_ACTIONS:
         return conv.primary_direction(
             intent, alternate=alternate, by=by, raw=raw, now=clock
         )
     if intent == "false_alarm":
         return conv.false_alarm(by=by, raw=raw)
     if intent == "on_my_way":
+        if conv._is_local(by):
+            return conv.local_going(by=by, raw=raw)
         return conv.on_my_way(by=by, raw=raw)
+    if intent == "outcome":
+        if conv._is_local(by) or (conv.owner and conv._is_local(conv.owner)):
+            return conv.report_local_outcome(raw, by=by)
+        return conv.record_outcome(raw)
     if intent == "need_second_look":
         return conv.need_second_look(by=by, raw=raw)
     if intent == "snooze_alert":

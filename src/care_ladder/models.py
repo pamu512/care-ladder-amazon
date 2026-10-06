@@ -11,6 +11,15 @@ class Contact(BaseModel):
     phone_e164: str | None = None
 
 
+class RosterEntry(BaseModel):
+    """One slot on the family escalation ladder (any length)."""
+
+    name: str
+    relationship: str = ""
+    local_responder: bool = False
+    phone_e164: str | None = None
+
+
 class NoMovementTrigger(BaseModel):
     enabled: bool = True
     timeout_sec: int
@@ -66,6 +75,7 @@ class CarePlan(BaseModel):
     quiet_hours: QuietHours | None = None
     secondary: Contact | None = None
     learning: LearningConfigModel | None = None
+    roster: list[RosterEntry] = Field(default_factory=list)
 
 
 class CueEvent(BaseModel):

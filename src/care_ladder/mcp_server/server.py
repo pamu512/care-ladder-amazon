@@ -35,7 +35,7 @@ from care_ladder.channels.dial import StubDialer
 from care_ladder.channels.speaker import SpeakerSimulator
 from care_ladder.ladder.orchestrator import run_incident
 from care_ladder.models import AuditEvent, CueEvent
-from care_ladder.plan_loader import load_care_plan
+from care_ladder.plan_loader import effective_roster, load_care_plan
 
 # Midday UTC clock so quiet-hours soft-suppress never hides the demo ladder.
 from datetime import datetime, timezone
@@ -366,8 +366,15 @@ def _time_since_cue_sec(inc) -> int:
 def _page_mobile(sess: dict[str, Any], household_id: str, reason: str) -> CareConversation:
     inc = sess["incident"]
     plan = load_care_plan(_AMAZON_PLAN)
+    roster = effective_roster(plan)
     next_name = (
-        plan.secondary.display_name if plan.secondary is not None else "Secondary contact"
+        roster[1].name
+        if len(roster) > 1
+        else (
+            plan.secondary.display_name
+            if plan.secondary is not None
+            else "Secondary contact"
+        )
     )
     conv = ensure_family_paged(
         household_id,
@@ -378,6 +385,7 @@ def _page_mobile(sess: dict[str, Any], household_id: str, reason: str) -> CareCo
         cue_text=str(inc.cue.kind).replace("_", " "),
         countdown_sec=180,
         next_contact=next_name,
+        roster=roster,
     )
     conv._refresh_apl(_time_since_cue_sec(inc))
     return conv
@@ -598,7 +606,10 @@ def caregiver_outcome(
             household_id,
             incident_id,
         )
-    conv.record_outcome(text)
+    if conv.owner and conv._is_local(conv.owner):
+        conv.report_local_outcome(text, by=conv.owner)
+    else:
+        conv.record_outcome(text)
     if conv.state != "closed":
         return _with_snapshot(
             {
@@ -715,11 +726,11 @@ def tick_care_timers(
         "from_state": before,
         "fsm_state": conv.state,
         "monitored_report": conv.monitored_report,
-        "ask_primary": conv.state == "defer_failed",
+        "ask_primary": conv.state in {"defer_failed", "ladder_exhausted"},
         "direction_actions": list(
             conv.audit_events()[-1].detail.get("direction_actions", [])
         )
-        if conv.state == "defer_failed"
+        if conv.state in {"defer_failed", "ladder_exhausted"}
         else [],
         "dial": False,
     }
