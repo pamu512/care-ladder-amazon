@@ -109,7 +109,7 @@ MUSIC_GAIN = {
 BEAT_XFADE = 0.40
 # Solid hold after each beat, longer than the xfade so leftover text
 # cannot sit in the overlap window (frame rounding can eat ~0.15s).
-BEAT_CLEAR = 0.70
+BEAT_CLEAR = 0.62
 ROOM_MIX = 0.18
 
 
