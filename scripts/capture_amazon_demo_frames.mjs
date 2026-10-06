@@ -1,47 +1,25 @@
-// Capture live /ui/ and /firetv/ frames for the Amazon remux.
+// Capture generated cards plus live /ui/ and /firetv/ frames for the 15-beat remux.
 // Requires local API (CARE_LADDER_ALLOW_INSECURE_LOCAL=1) and puppeteer-core.
 import fs from "node:fs";
 import path from "node:path";
-import { spawnSync } from "node:child_process";
+import { pathToFileURL } from "node:url";
 import puppeteer from "puppeteer-core";
 
 const ROOT = process.env.ROOT || process.cwd();
 const BASE = process.env.BASE || "http://127.0.0.1:8010";
 const OUT = process.env.FRAMES || path.join(ROOT, "docs/demo/frames");
-const CHROME = process.env.CHROME || "/opt/google/chrome/chrome";
-const PY = process.env.PY || path.join(ROOT, ".venv/bin/python");
+const CHROME =
+  process.env.CHROME ||
+  (fs.existsSync("/opt/google/chrome/chrome")
+    ? "/opt/google/chrome/chrome"
+    : "/usr/local/bin/chrome");
 
 fs.mkdirSync(OUT, { recursive: true });
 
-async function postFixture(fixture) {
-  const res = await fetch(`${BASE}/demo/run`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fixture }),
-  });
-  if (!res.ok) {
-    throw new Error(`demo/run ${fixture} -> ${res.status} ${await res.text()}`);
-  }
-  return res.json();
-}
-
-async function latestIncident() {
-  const list = await (await fetch(`${BASE}/incidents`)).json();
-  const mine = list.filter((i) => i.household_id === "amazon-demo-1");
-  if (!mine.length) return null;
-  const id = mine[mine.length - 1].id;
-  return (await fetch(`${BASE}/incidents/${id}`)).json();
-}
-
-async function ackLatest() {
-  const inc = await latestIncident();
-  if (!inc) throw new Error("no incident to ack");
-  const res = await fetch(`${BASE}/incidents/${inc.id}/ack`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contact: "caregiver", note: "demo remux ack" }),
-  });
-  if (!res.ok) throw new Error(`ack ${res.status} ${await res.text()}`);
+function loadStory() {
+  const p = path.join(OUT, "story.json");
+  if (!fs.existsSync(p)) throw new Error(`missing ${p}; run amazon_demo_story.py first`);
+  return JSON.parse(fs.readFileSync(p, "utf8"));
 }
 
 async function shot(page, name) {
@@ -50,7 +28,81 @@ async function shot(page, name) {
   console.log("wrote", dest);
 }
 
+async function sanitizeFireTv(page) {
+  await page.evaluate(() => {
+    const hide = (sel) =>
+      document.querySelectorAll(sel).forEach((el) => {
+        el.style.display = "none";
+      });
+    hide("#console");
+    hide("#consoleToggle");
+    hide("#agentTools");
+    hide("#gateBackdrop");
+    hide("#cShowTools");
+    hide(".audit");
+    hide("#auditEvents");
+    hide("#incId");
+    hide(".inc-id");
+    document.querySelectorAll("button, .btn, .actions *").forEach((el) => {
+      const t = (el.textContent || "");
+      if (/\(555\)/.test(t) || /55501/.test(t) || /010-2276/.test(t)) {
+        el.style.display = "none";
+      }
+    });
+    const walk = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        node.nodeValue = node.nodeValue
+          .replaceAll("\u2014", ", ")
+          .replaceAll("\u2013", "-")
+          .replaceAll(" — ", ", ")
+          .replace(/\backed\b/gi, "acknowledged")
+          .replace(/\bfall\b/gi, "cue")
+          .replace(/\bResident's home\b/g, "Mom's home")
+          .replace(/\bResident\b/g, "Mom")
+          .replace(/\bresident\b/g, "Mom")
+          .replace(/\(555\)\s*010-2276/g, "")
+          .replace(/\+1 ?212 ?555 ?0176/g, "")
+          .replace(/\b[0-9a-f]{8}\b/gi, "")
+          .replace(/\s+·\s+·/g, " · ")
+          .replace(/\s+·\s*$/g, "")
+          .replace(/Request call\s*·\s*/g, "Request call");
+      } else if (node.childNodes) {
+        node.childNodes.forEach(walk);
+      }
+    };
+    walk(document.body);
+  });
+}
+
+async function sanitizeUi(page) {
+  await page.evaluate(() => {
+    document.querySelectorAll(".inc-id, .trace-link, .fall-banner, [data-ack]").forEach((el) => {
+      el.style.display = "none";
+    });
+    document.querySelectorAll(".clipsec, .dossier img").forEach((el) => {
+      el.style.display = "none";
+    });
+    const walk = (node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        node.nodeValue = node.nodeValue
+          .replaceAll("\u2014", ", ")
+          .replaceAll("\u2013", "-")
+          .replace(/\backed\b/gi, "acknowledged")
+          .replace(/\bfall signature\b/gi, "cue")
+          .replace(/\bFall signature\b/g, "Cue");
+      } else if (node.childNodes) {
+        node.childNodes.forEach(walk);
+      }
+    };
+    walk(document.body);
+    document.querySelectorAll(".tl-head").forEach((btn) => {
+      if (btn.getAttribute("aria-expanded") !== "true") btn.click();
+    });
+  });
+}
+
 async function main() {
+  const story = loadStory();
   const browser = await puppeteer.launch({
     executablePath: CHROME,
     headless: "new",
@@ -58,6 +110,7 @@ async function main() {
       "--no-sandbox",
       "--disable-dev-shm-usage",
       "--hide-scrollbars",
+      "--allow-file-access-from-files",
       "--window-size=1280,720",
     ],
     defaultViewport: { width: 1280, height: 720, deviceScaleFactor: 1 },
@@ -65,72 +118,64 @@ async function main() {
   const page = await browser.newPage();
   page.setDefaultTimeout(20000);
 
-  await postFixture("no_movement_silence");
-  await page.goto(`${BASE}/ui/`, { waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 800));
-  await shot(page, "shot01_ui");
+  const overlay = pathToFileURL(path.join(ROOT, "scripts/demo_overlays.html")).href;
+  await page.goto(overlay, { waitUntil: "networkidle0" });
+  await page.evaluate((s) => {
+    window.fillStory(s);
+  }, story);
 
+  const scenes = [
+    ["map", "b01_map"],
+    ["camera_missed", "b02_missed"],
+    ["phone_dead", "b02_battery"],
+    ["phone_call", "b02_call"],
+    ["camera_off", "b02_camera"],
+    ["title", "b03_title"],
+    ["ladder_setup", "b04_ladder"],
+    ["cue_log", "b05_cue"],
+    ["alexa_notify", "b06_notify"],
+    ["apl_card", "b06_apl"],
+    ["defer_sister", "b07_defer"],
+    ["split", "b08_split"],
+    ["try_else", "b09_tryelse"],
+    ["mum_silent", "b09_silent"],
+    ["neighbor_notify", "b10_neighbor"],
+    ["neighbor_going", "b11_going"],
+    ["shes_okay", "b11_okay"],
+    ["how_is_mum", "b11_status"],
+    ["routine", "b12_routine"],
+    ["roster_msg", "b12_roster"],
+    ["architecture", "b14_arch"],
+    ["pytest", "b14_pytest"],
+    ["close", "b15_close"],
+  ];
+  for (const [id, name] of scenes) {
+    await page.evaluate((sid) => window.showScene(sid), id);
+    await new Promise((r) => setTimeout(r, 120));
+    await shot(page, name);
+    if (name === "b03_title") {
+      await page.evaluate(() => {
+        const sub = document.getElementById("titleSub");
+        if (sub) sub.classList.add("in");
+      });
+      await new Promise((r) => setTimeout(r, 80));
+      await shot(page, "b03_title_in");
+    }
+  }
+
+  // Live Fire TV ambient view (supporting surface). Sanitize copy first.
   await page.goto(`${BASE}/firetv/`, { waitUntil: "networkidle0" });
   await new Promise((r) => setTimeout(r, 900));
-  await page.keyboard.press("ArrowDown");
-  await page.keyboard.press("ArrowRight");
-  await shot(page, "shot03_allclear");
+  await sanitizeFireTv(page);
+  await new Promise((r) => setTimeout(r, 200));
+  await shot(page, "b13_firetv");
 
-  const soft = await postFixture("alexa_path_a_soft_ok");
-  await page.reload({ waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 1200));
-  await page.click("#consoleToggle");
-  await new Promise((r) => setTimeout(r, 400));
-  await shot(page, "shot04_soft_ok");
-  fs.writeFileSync(path.join(OUT, "shot04_incident.json"), JSON.stringify(soft));
-
-  await page.click("#consoleToggle");
-  const human = await postFixture("alexa_path_a_needs_human");
-  await page.reload({ waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 1200));
-  await shot(page, "shot05_needs_human");
-  fs.writeFileSync(path.join(OUT, "shot05_incident.json"), JSON.stringify(human));
-
-  await ackLatest();
-  await page.reload({ waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 1000));
-  await shot(page, "shot06_acked");
-
-  await postFixture("alexa_path_b");
-  await page.reload({ waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 1200));
-  await shot(page, "shot07_occluded");
-
-  const sim = spawnSync(
-    PY,
-    ["-m", "care_ladder.mcp_server.alexa_sim", "--url", BASE, "--answer", "don't worry"],
-    { encoding: "utf8", env: { ...process.env, CARE_LADDER_ALLOW_INSECURE_LOCAL: "1" } },
-  );
-  const log = (sim.stdout || "") + (sim.stderr || "");
-  fs.writeFileSync(path.join(OUT, "shot08_sim.log"), log);
-  await page.reload({ waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 1200));
-  await page.evaluate(() => {
-    const btn = document.getElementById("cShowTools");
-    if (btn) btn.click();
-  });
-  await new Promise((r) => setTimeout(r, 400));
-  await shot(page, "shot08_firetv");
-
-  await page.goto(`${BASE}/firetv/`, { waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 800));
-  await page.evaluate(() => {
-    document.getElementById("gateBackdrop")?.classList.add("open");
-  });
-  await new Promise((r) => setTimeout(r, 300));
-  await shot(page, "shot09_gate");
-
+  // Live console: event log only, IDs and live frames hidden.
   await page.goto(`${BASE}/ui/`, { waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 600));
-  await shot(page, "shot10_ui");
-  await page.goto(`${BASE}/firetv/`, { waitUntil: "networkidle0" });
-  await new Promise((r) => setTimeout(r, 800));
-  await shot(page, "shot10_firetv");
+  await new Promise((r) => setTimeout(r, 700));
+  await sanitizeUi(page);
+  await new Promise((r) => setTimeout(r, 200));
+  await shot(page, "b05_ui");
 
   await browser.close();
 }

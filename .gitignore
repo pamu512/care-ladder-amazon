@@ -8,5 +8,11 @@ __pycache__/
 *.egg-info/
 clips/*.avi
 clips/meta
-docs/demo/vo/
+docs/demo/vo/*
+!docs/demo/vo/chatterbox/
+!docs/demo/vo/edge/
+docs/demo/vo/chatterbox/takes/
+docs/demo/vo/chatterbox/takes/**
+docs/demo/vo/edge/takes/
+docs/demo/vo/edge/takes/**
 docs/demo/frames/

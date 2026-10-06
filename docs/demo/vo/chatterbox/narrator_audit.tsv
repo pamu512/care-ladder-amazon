@@ -1,0 +1,50 @@
+# rank	clip	sent_idx	end_ratio	f0_std	stress	bad	text
+1	b11b	0	0.583	36.35	-5.0	10.183	That comes straight back to me.
+2	b05	2	0.833	27.67	0.0	8.616	The model was trained on a public Kag-gull dataset.
+3	b04	0	0.833	36.19	0.0	8.191	My family sets the order.
+4	b02	1	0.750	27.56	0.0	7.622	We tried a camera, and she hated being watched.
+5	b06	0	0.750	31.08	0.0	7.446	Here's the alert on my phone, through Alexa Plus.
+6	b12	2	0.750	34.31	0.0	7.285	If she misses one, it escalates softly.
+7	b03	0	0.667	21.23	0.0	6.939	So I built Care Ladder.
+8	b08a	0	0.667	26.60	0.0	6.670	My sister doesn't answer.
+9	b12	3	0.667	27.49	0.0	6.625	And if her schedule changes, everyone on the ladder hears about it.
+10	b12	0	0.667	30.08	0.0	6.496	Care Ladder also learns her day.
+11	b14	1	0.667	30.77	0.0	6.461	It runs on AWS, with Python and OpenCV.
+12	b10a	2	0.667	31.58	0.0	6.421	So it doesn't look like a false alarm.
+13	b11b	1	0.667	34.56	0.0	6.272	Later I can ask Alexa, how is Mum, and hear the last cue, the last acknowledgment, and whether it's been quiet since.
+14	b03	1	0.667	35.32	0.0	6.234	Alexa Plus checks in by voice, wherever she is in the house, so it works even when her phone is dead.
+15	b01	3	0.583	21.72	0.0	5.914	And my mum said no to a caretaker.
+16	b10a	1	0.583	21.96	0.0	5.902	What happened, when, and who already didn't respond.
+17	b14	3	0.583	31.48	0.0	5.426	Two hundred and four tests pass, and it's open source.
+18	b12	1	0.583	35.02	0.0	5.249	After three repeating windows, it suggests a routine for us to confirm.
+19	b07b	0	0.500	28.32	0.0	4.584	I'm stuck in a meeting, so I pass it to my sister.
+20	b15	1	0.500	30.46	0.0	4.477	Alexa Plus is primary.
+21	b15	3	0.500	30.94	0.0	4.453	This is not a medical device.
+22	b05	1	0.500	32.51	0.0	4.375	The camera only acts on cues, so nobody watches a feed.
+23	b14	2	0.417	25.62	0.0	3.719	It isn't a published skill yet, and much of the Alexa side runs in a simulator, but a real Alexa alert did reach my phone.
+24	b10a	0	0.417	27.47	0.0	3.627	Our neighbor gets the alert, and it says why.
+25	b06	3	0.417	32.06	0.0	3.397	the time,
+26	b08c	1	0.417	32.52	0.0	3.374	Whatever she says, okay, needs help, or nothing, comes straight back to me.
+27	b02	0	0.333	23.56	0.0	2.822	Her phone is often dead.
+28	b01	0	0.333	23.65	0.0	2.817	My mum lives alone in India.
+29	b02	2	0.333	24.88	0.0	2.756	And none of us can watch a feed all day from across the world.
+30	b04	2	0.333	28.89	0.0	2.555	Each person gets a gentle re-prompt, then the ladder moves on.
+31	b05	0	0.333	30.19	0.0	2.491	A camera cue or a missed routine starts the ladder.
+32	b06	6	0.333	31.27	0.0	2.436	The buttons on screen match what I can say.
+33	b06	5	0.333	31.27	0.0	2.436	any missed check-ins.
+34	b06	4	0.333	31.27	0.0	2.436	how long ago,
+35	b07a	0	0.333	39.20	0.0	2.040	Alexa, call my sister instead.
+36	b15	0	0.250	23.88	0.0	1.806	Care Ladder is for families who live far from someone who lives alone.
+37	b08c	0	0.167	10.29	0.0	1.486	And it asks Mum.
+38	b06	1	0.167	20.61	0.0	0.970	It tells me why.
+39	b06	2	0.167	30.32	0.0	0.484	The cue,
+40	b08a	1	0.167	32.42	0.0	0.379	So Alexa Plus does two things at once.
+41	b15	2	0.167	33.77	0.0	0.312	Fire TV is supporting.
+42	b01	2	0.083	30.09	0.0	-0.505	My sister is in Europe.
+43	b03	2	0.000	27.62	0.0	-1.381	Then it makes sure someone in the family actually answers.
+44	b14	0	0.000	27.91	0.0	-1.396	Alexa Plus talks to my own M C P server.
+45	b04	1	0.000	28.31	0.0	-1.416	Me, my wife, my sister, then our neighbor, who lives in the same city and can walk over.
+46	b08a	2	0.000	29.09	0.0	-1.455	It asks me what to do next.
+47	b13	0	0.000	30.85	0.0	-1.542	On Fire TV, there's a calm, ten-foot view of how things are.
+48	b09	0	0.000	34.51	0.0	-1.725	Try someone else.
+49	b01	1	0.000	35.25	0.0	-1.762	I'm in Hong Kong.

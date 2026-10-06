@@ -2,29 +2,35 @@
 
 Shipped artifact: [`docs/demo/care-ladder-amazon-demo.mp4`](care-ladder-amazon-demo.mp4)
 
-- Duration: `00:02:03.38` (123.38s), 1280x720, H.264 + AAC, about 2.6 MB
-- VO source: [`docs/demo-video-script-amazon.md`](../demo-video-script-amazon.md)
-- Method: same remux the OpenCV pack used (live local UI stills + spoken VO, then ffmpeg). Browser at 1280x720 because a Fire TV stick was not available in this environment.
+This cut is the 15-beat family-ladder script with US English edge-tts VO.
+`docs/demo/care-ladder-amazon-demo.mp4` is the ship path. Intermediate frames
+stay gitignored; committed VO lives in [`docs/demo/vo/edge/`](vo/edge/).
 
-This tape does not claim a trained fall model and does not invent accuracy numbers. Fall training is a path only. Dataset slug `elwalyahmad/fall-detection`. Weights would be `models/fall_classifier.npz`. `CueDetector.from_plan` loads that file when it is present. Training did not run. Kaggle credentials were missing.
+## Voice
 
-## Regenerate
+- Edge-tts (ship voice): `./scripts/generate_amazon_demo_vo_edge.sh`
+  - Narrator `en-US-BrianMultilingualNeural` at about -5%
+  - Alexa `en-US-AvaNeural` (small-speaker EQ)
+  - Neighbor `en-US-EmmaMultilingualNeural` (calm)
+  - `LINE=b03` regenerates one clip
+  - `docs/demo/vo/anoop/<clip>.wav` overrides narrator TTS through the same mix
+  - Settings: [`vo/edge/SETTINGS.txt`](vo/edge/SETTINGS.txt)
+- Cartesia (later swap): `CARTESIA_API_KEY=... ./scripts/generate_amazon_demo_vo.sh`
+  - Refuses to invent audio without the key
+  - Skips wavs that already exist
+  - Voices: narrator Ricardo, Alexa Camille, neighbor Connie
+  - TTS expansions only: "Alexa Plus", "M C P"
+- Chatterbox (not the ship voice): `./scripts/generate_amazon_demo_vo_chatterbox.sh`
 
-1. Synthesize `docs/demo/vo/shot01.wav` through `shot10.wav` (not committed):
+Then remux (VO dir and output are env vars so a Cartesia swap is re-time + re-render):
 
 ```bash
-# needs CARTESIA_API_KEY. Spoken lines live in the script (TTS expansions only: Alexa Plus, M C P, Cue Detector from plan).
-./scripts/generate_amazon_demo_vo.sh
+VO=docs/demo/vo/edge \
+OUT=docs/demo/care-ladder-amazon-demo.mp4 \
+CARE_LADDER_ALLOW_INSECURE_LOCAL=1 \
+  ./scripts/render_amazon_demo.sh
 ```
 
-2. Recapture live `/ui/` and `/firetv/` frames and remux:
-
-```bash
-CARE_LADDER_ALLOW_INSECURE_LOCAL=1 ./scripts/render_amazon_demo.sh
-```
-
-Needs: local API (script starts uvicorn on 8010 if `/plan` is down), Chrome at `/opt/google/chrome/chrome` (or `CHROME=`), Node + puppeteer-core (installed under `/tmp/care-ladder-demo-capture`), ffmpeg, and the ten VO wavs.
-
-Intermediates (`docs/demo/vo/`, `docs/demo/frames/`) are gitignored. The mp4 is the ship file.
-
-Local path after a successful remux: `/workspace/docs/demo/care-ladder-amazon-demo.mp4`
+Needs: local API (script starts uvicorn on 8010 if `/plan` is down), Chrome,
+Node + puppeteer-core (under `/tmp/care-ladder-demo-capture`), ffmpeg, and the
+beat wavs named in [`vo_lines.tsv`](vo_lines.tsv).

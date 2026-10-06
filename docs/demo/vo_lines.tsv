@@ -1,0 +1,20 @@
+b01	N	My family lives in different countries and time zones. So when something happens to my mom, we only find out if she tells us.
+b02	N	We installed a camera, but we still missed things. And when her phone was dead, or she was out of view, all we could do was call her neighbors to go check. On top of that, she hated the camera. She felt watched all the time.
+b03	N	So I built Care Ladder. I don't have to stay glued to a screen, I still hear about it when something happens, and my mom keeps her privacy. Alexa Plus checks in with her by voice, anywhere in the house.
+b04	N	My family sets the order. Me, my wife, my sister, then our neighbor, who lives in the same city and can walk over. Each person gets a gentle re-prompt, then the ladder moves on.
+b05	N	A camera cue or a missed routine starts the ladder. The camera only acts on cues, so nobody watches a feed. The model was trained on a public Kaggle dataset.
+b06	N	Here's the alert on my phone, through Alexa Plus. It tells me why. The cue, the time, how long ago, any missed check-ins. The buttons on screen match what I can say.
+b07a	N	Alexa, call my sister instead.
+b07b	N	I'm stuck in a meeting. So I pass it to my sister.
+b08a	N	My sister doesn't answer. So Alexa Plus does two things at once. It asks me what to do next.
+b08b	A	Are you okay?
+b08c	N	And it asks Mom. Whatever she says, okay, needs help, or nothing, comes straight back to me.
+b09	N	Try someone else.
+b10a	N	Our neighbor gets the alert, and it says why. What happened, when, and who already didn't respond. So it doesn't look like a false alarm.
+b10b	G	I'm going.
+b11a	G	She's okay.
+b11b	N	That comes straight back to me. Later I can ask Alexa, how is Mom, and hear the last cue, the last acknowledgment, and whether it's been quiet since.
+b12	N	Care Ladder also learns her day. After three repeating windows, it suggests a routine for us to confirm. If she misses one, it escalates softly. And if her schedule changes, everyone on the ladder hears about it.
+b13	N	On Fire TV, there's a calm, ten-foot view of how things are.
+b14	N	Alexa Plus talks to my own M C P server. It runs on AWS, with Python and OpenCV. It isn't a published skill yet, and much of the Alexa side runs in a simulator, but a real Alexa alert did reach my phone. Two hundred and four tests pass, and it's open source.
+b15	N	Care Ladder is for families who live far from someone who lives alone. Alexa Plus is primary. Fire TV is supporting. This is not a medical device.

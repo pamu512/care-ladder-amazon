@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Care Ladder demo cards</title>
+<style>
+@font-face {
+  font-family: "Instrument Sans";
+  src: url("../src/care_ladder/api/static/firetv/fonts/instrument-sans-latin.woff2") format("woff2");
+  font-weight: 400 700;
+}
+:root {
+  --bg: #1E1C18;
+  --ink: #EFEAE2;
+  --muted: rgba(239,234,226,0.68);
+  --faint: rgba(239,234,226,0.42);
+  --sage: #A8B5A0;
+  --amber: #D9A05B;
+  --clay: #D98873;
+  --line: rgba(239,234,226,0.12);
+  --phone: #111318;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 1280px; height: 720px; overflow: hidden; background: var(--bg); color: var(--ink);
+  font-family: "Instrument Sans", "Segoe UI", sans-serif; }
+.scene { display: none; width: 1280px; height: 720px; position: relative; }
+.scene.on { display: block; }
+.card {
+  position: absolute; inset: 48px 64px; background: #2E2B25; border: 1px solid var(--line);
+  border-radius: 22px; padding: 48px 56px;
+}
+h1 { font-size: 52px; font-weight: 650; letter-spacing: -0.02em; line-height: 1.15; }
+h2 { font-size: 28px; font-weight: 600; color: var(--sage); }
+.sub { margin-top: 16px; font-size: 22px; color: var(--muted); }
+.tiny { font-size: 16px; color: var(--faint); letter-spacing: 0.04em; }
+.dots { display: flex; gap: 72px; margin-top: 64px; justify-content: center; }
+.dotwrap { text-align: center; }
+.dot { width: 28px; height: 28px; border-radius: 50%; background: var(--amber); margin: 0 auto 12px;
+  box-shadow: 0 0 0 10px rgba(217,160,91,0.16); }
+.dot.eu { background: var(--sage); box-shadow: 0 0 0 10px rgba(168,181,160,0.16); }
+.dot.hk { background: var(--clay); box-shadow: 0 0 0 10px rgba(217,136,115,0.16); }
+.clock { margin-top: 8px; font-size: 20px; color: var(--sage); letter-spacing: 0.04em; }
+.timeline { display: flex; align-items: center; margin-top: 28px; gap: 0; }
+.tick { flex: 1; height: 3px; background: var(--line); position: relative; }
+.tick .mark {
+  position: absolute; left: 62%; top: -8px; width: 18px; height: 18px;
+  border-radius: 50%; background: var(--clay); transform: translateX(-50%);
+  box-shadow: 0 0 0 6px rgba(217,136,115,0.22);
+}
+.phone {
+  width: 320px; height: 620px; background: var(--phone); border-radius: 36px;
+  border: 10px solid #2a2d33; position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%,-50%); overflow: hidden;
+}
+.phone .notch { width: 120px; height: 18px; background: #000; border-radius: 0 0 12px 12px; margin: 0 auto; }
+.phone .inner { padding: 28px 22px; }
+.batt { width: 84px; height: 40px; border: 3px solid #fb7185; border-radius: 8px; margin: 180px auto 12px; position: relative; }
+.batt:after { content: ""; position: absolute; right: -8px; top: 12px; width: 5px; height: 12px; background: #fb7185; border-radius: 0 2px 2px 0; }
+.batt i { display: block; width: 8%; height: 100%; background: #fb7185; }
+.call-name { text-align: center; margin-top: 80px; font-size: 28px; }
+.call-sub { text-align: center; color: var(--faint); margin-top: 8px; }
+.ring { width: 72px; height: 72px; border-radius: 50%; border: 2px solid var(--sage); margin: 48px auto 0;
+  animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { transform: scale(1.08); opacity: 0.7; } }
+.roster { display: flex; gap: 16px; margin-top: 36px; }
+.rung { flex: 1; background: #35322A; border: 1px solid var(--line); border-radius: 14px; padding: 18px 16px; }
+.rung b { display: block; font-size: 22px; margin-bottom: 6px; }
+.rung span { color: var(--muted); font-size: 14px; }
+.timers { margin-top: 28px; color: var(--muted); font-size: 20px; }
+.log {
+  font-family: ui-monospace, Menlo, monospace; background: #12110e; border-radius: 12px;
+  padding: 22px 24px; margin-top: 32px; font-size: 18px; color: var(--sage);
+}
+.notify { background: #1c1f26; border-radius: 18px; padding: 18px 20px; margin-top: 40px; }
+.notify .who { font-size: 13px; color: var(--faint); text-transform: uppercase; letter-spacing: 0.08em; }
+.notify .body { margin-top: 8px; font-size: 16px; line-height: 1.45; }
+.apl {
+  width: 560px; min-height: 420px; background: #111; border-radius: 20px; padding: 24px;
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%);
+}
+.thumb { height: 160px; border-radius: 12px; background: linear-gradient(160deg,#3d4a3c,#2a2d28 55%,#232018); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; color: var(--ink); }
+.thumb svg { display: block; }
+.thumb .cue { font-size: 18px; letter-spacing: 0.04em; color: var(--sage); }
+.cam-frame { height: 280px; margin-top: 28px; border-radius: 16px; background: #15171b; position: relative; overflow: hidden; }
+.cam-frame:before { content: ""; position: absolute; inset: -12px; background: linear-gradient(180deg,#2a2d33,#15171b); filter: blur(10px); }
+.cam-frame:after { content: ""; position: absolute; inset: 0; background: radial-gradient(ellipse at center, rgba(40,44,50,0.15), #111318 72%); }
+.cam-icon { position: absolute; inset: 0; display: grid; place-items: center; z-index: 1; }
+.dir-stack { flex-direction: column; align-items: stretch; }
+.dir-stack i { text-align: center; padding: 12px 14px; }
+.dir-stack i.picked { background: var(--sage); color: #1E1C18; position: relative; }
+.dir-stack i.picked:after { content: ""; position: absolute; right: 18px; top: 50%; width: 14px; height: 14px; border-radius: 50%; background: rgba(30,28,24,0.35); transform: translateY(-50%) scale(1.15); box-shadow: 0 0 0 6px rgba(30,28,24,0.12); }
+.btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 18px; }
+.btns i { font-style: normal; border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; font-size: 14px; }
+.split { display: flex; height: 720px; }
+.split > div { flex: 1; padding: 40px 36px; }
+.split .L { background: #171a20; }
+.split .R { background: #2a2620; }
+.arch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; }
+.arch div { background: #35322A; border-radius: 14px; padding: 22px; font-size: 22px; text-align: center; }
+.center { text-align: center; padding-top: 180px; }
+.legal { position: absolute; bottom: 64px; left: 0; right: 0; text-align: center; color: var(--faint); font-size: 16px; }
+.title-sub { opacity: 0.22; }
+.title-sub.in { opacity: 1; }
+</style>
+</head>
+<body>
+<div id="map" class="scene">
+  <div class="card">
+    <p class="tiny">CARE LADDER</p>
+    <h1 id="mapCaption">One family. Three time zones.</h1>
+    <div class="dots">
+      <div class="dotwrap"><div class="dot"></div><div>India</div><div class="clock" id="tzIndia">17:30</div></div>
+      <div class="dotwrap"><div class="dot hk"></div><div>Hong Kong</div><div class="clock" id="tzHK">20:00</div></div>
+      <div class="dotwrap"><div class="dot eu"></div><div>EU</div><div class="clock" id="tzEU">14:00</div></div>
+    </div>
+  </div>
+</div>
+<div id="phone_dead" class="scene">
+  <div class="phone"><div class="notch"></div><div class="inner">
+    <div class="batt"><i></i></div>
+    <div class="call-sub">Battery dead</div>
+  </div></div>
+</div>
+<div id="phone_call" class="scene">
+  <div class="phone"><div class="notch"></div><div class="inner">
+    <div class="call-name">Neighbor</div>
+    <div class="call-sub">Calling · ringing</div>
+    <div class="ring"></div>
+  </div></div>
+</div>
+<div id="title" class="scene">
+  <div class="card center" style="padding-top:190px">
+    <h1>Care Ladder.</h1>
+    <h2 id="titleSub" class="title-sub" style="margin-top:12px">Family check-ins with Alexa+.</h2>
+  </div>
+</div>
+<div id="ladder_setup" class="scene">
+  <div class="card">
+    <p class="tiny">FAMILY LADDER</p>
+    <h1>Who gets the check-in</h1>
+    <div class="roster" id="roster"></div>
+    <p class="timers" id="timers"></p>
+  </div>
+</div>
+<div id="cue_log" class="scene">
+  <div class="card">
+    <p class="tiny">SIMULATOR EVENT LOG</p>
+    <h1>Camera cue</h1>
+    <p class="sub">An event line. Nobody is watching a feed.</p>
+    <div class="log" id="cueLine"></div>
+  </div>
+</div>
+<div id="alexa_notify" class="scene">
+  <div class="phone"><div class="notch"></div><div class="inner">
+    <p class="tiny">ALEXA+</p>
+    <div class="notify">
+      <div class="who">Alexa · Mom</div>
+      <div class="body" id="notifyBody"></div>
+    </div>
+  </div></div>
+</div>
+<div id="apl_card" class="scene">
+  <div class="apl">
+    <div class="thumb">
+      <svg width="56" height="56" viewBox="0 0 64 64" aria-hidden="true">
+        <path fill="#A8B5A0" d="M32 10 L58 32 H50 V54 H14 V32 H6 Z"/>
+        <rect fill="#2E2B25" x="27" y="38" width="10" height="16"/>
+      </svg>
+      <div class="cue" id="aplCue">Cue: 12:00</div>
+    </div>
+    <h2 id="aplHouse" style="margin-top:16px"></h2>
+    <p class="sub" id="aplMeta"></p>
+    <div class="btns" id="aplBtns"></div>
+  </div>
+</div>
+<div id="camera_missed" class="scene">
+  <div class="card">
+    <p class="tiny">CAMERA</p>
+    <div class="cam-frame">
+      <div class="cam-icon">
+        <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
+          <rect x="10" y="28" width="52" height="36" rx="8" fill="none" stroke="#EFEAE2" stroke-width="4"/>
+          <path d="M62 36 L78 28 V64 L62 56 Z" fill="none" stroke="#EFEAE2" stroke-width="4"/>
+        </svg>
+      </div>
+    </div>
+    <div class="timeline" aria-hidden="true">
+      <div class="tick"></div>
+      <div class="tick"></div>
+      <div class="tick"><span class="mark"></span></div>
+      <div class="tick"></div>
+    </div>
+    <h2 style="margin-top:22px">Missed moment</h2>
+    <p class="sub">the camera was on, and we still missed it</p>
+  </div>
+</div>
+<div id="camera_off" class="scene">
+  <div class="card">
+    <p class="tiny">CAMERA</p>
+    <div class="cam-frame">
+      <div class="cam-icon">
+        <svg width="88" height="88" viewBox="0 0 88 88" aria-hidden="true">
+          <rect x="10" y="28" width="52" height="36" rx="8" fill="none" stroke="#EFEAE2" stroke-width="4"/>
+          <path d="M62 36 L78 28 V64 L62 56 Z" fill="none" stroke="#EFEAE2" stroke-width="4"/>
+          <line x1="16" y1="16" x2="72" y2="72" stroke="#D98873" stroke-width="5" stroke-linecap="round"/>
+        </svg>
+      </div>
+    </div>
+    <h2 style="margin-top:22px">Camera off</h2>
+    <p class="sub">nobody watches a feed</p>
+  </div>
+</div>
+<div id="try_else" class="scene">
+  <div class="phone" style="width:360px"><div class="notch"></div><div class="inner">
+    <p class="tiny">ANOOP · ALEXA+</p>
+    <p class="sub" style="margin-top:12px">What should I do next?</p>
+    <div class="btns dir-stack" id="tryBtns" style="margin-top:28px"></div>
+  </div></div>
+</div>
+<div id="defer_sister" class="scene">
+  <div class="card">
+    <p class="tiny">DEFERRAL</p>
+    <h1>Passed to Sister</h1>
+    <p class="sub" id="deferLine"></p>
+    <p class="timers" id="deferDeadline"></p>
+  </div>
+</div>
+<div id="split" class="scene">
+  <div class="split">
+    <div class="L">
+      <p class="tiny">ANOOP · ALEXA+</p>
+      <h2>Sister unanswered</h2>
+      <p class="sub" id="failPhrase"></p>
+      <div class="btns" id="dirBtns" style="margin-top:24px"></div>
+    </div>
+    <div class="R">
+      <p class="tiny">MOM · HOME</p>
+      <h2>Alexa+</h2>
+      <p class="sub" id="alexaHome" style="font-size:36px;margin-top:48px;color:var(--ink)"></p>
+    </div>
+  </div>
+</div>
+<div id="mum_silent" class="scene">
+  <div class="card">
+    <p class="tiny">MOM · HOME</p>
+    <h1>No answer from Mom</h1>
+    <p class="sub" id="silentLine"></p>
+  </div>
+</div>
+<div id="neighbor_notify" class="scene">
+  <div class="phone" style="width:380px"><div class="notch"></div><div class="inner">
+    <p class="tiny">NEIGHBOR · ALEXA+</p>
+    <div class="notify">
+      <div class="who">Why this alert</div>
+      <div class="body" id="neighborBody"></div>
+    </div>
+  </div></div>
+</div>
+<div id="neighbor_going" class="scene">
+  <div class="card center"><h1 id="goingLine">Neighbor is going</h1></div>
+</div>
+<div id="shes_okay" class="scene">
+  <div class="card center"><h1>She's okay</h1><p class="sub" id="okayReport"></p></div>
+</div>
+<div id="how_is_mum" class="scene">
+  <div class="card">
+    <p class="tiny">HOW IS MOM</p>
+    <h1 id="statusSpoken"></h1>
+    <p class="sub" id="statusBody"></p>
+  </div>
+</div>
+<div id="routine" class="scene">
+  <div class="card">
+    <p class="tiny">LEARNED ROUTINE</p>
+    <h1 id="routinePhrase"></h1>
+    <div class="btns" style="margin-top:28px"><i>Confirm routine</i></div>
+  </div>
+</div>
+<div id="roster_msg" class="scene">
+  <div class="card center"><h1 id="rosterMsg"></h1></div>
+</div>
+<div id="architecture" class="scene">
+  <div class="card">
+    <p class="tiny">HOW IT FITS</p>
+    <h1>Alexa+ on a self-hosted path</h1>
+    <div class="arch">
+      <div>Alexa+</div><div>MCP server</div><div>Alexa notifications</div>
+      <div>APL</div><div>Fire TV</div><div>AWS</div>
+    </div>
+  </div>
+</div>
+<div id="pytest" class="scene">
+  <div class="card">
+    <p class="tiny">TEST RUN</p>
+    <h1 id="pytestLine">204 passed</h1>
+    <p class="sub">Real pytest summary from this machine.</p>
+  </div>
+</div>
+<div id="close" class="scene">
+  <div class="card center">
+    <h1>Care Ladder.</h1>
+    <h2 style="margin-top:12px">Family check-ins with Alexa+.</h2>
+    <p class="legal">Not a medical device.</p>
+  </div>
+</div>
+<script>
+const STORY = window.STORY || {};
+function show(id) {
+  document.querySelectorAll(".scene").forEach(s => s.classList.toggle("on", s.id === id));
+}
+function fill(story) {
+  const r = story.roster || [];
+  document.getElementById("roster").innerHTML = r.map(e =>
+    `<div class="rung"><b>${e.name}</b><span>${e.relationship}${e.local_responder ? " · local" : ""}</span></div>`
+  ).join("");
+  const t = story.timers || {};
+  document.getElementById("timers").textContent =
+    `${t.reprompt_sec}s re-prompt · ${t.next_rung_sec}s next rung`;
+  document.getElementById("cueLine").textContent = (story.cue && story.cue.line) || "camera cue · event";
+  document.getElementById("notifyBody").textContent = story.me_alert || "";
+  const apl = story.apl || {};
+  const tz = story.timezones || {};
+  const cap = document.getElementById("mapCaption");
+  if (cap) cap.textContent = tz.caption || "One family. Three time zones.";
+  const setTxt = (id, v) => { const el = document.getElementById(id); if (el && v) el.textContent = v; };
+  setTxt("tzIndia", tz.india);
+  setTxt("tzHK", tz.hong_kong);
+  setTxt("tzEU", tz.eu);
+  document.getElementById("aplHouse").textContent = apl.householdLabel || "Mom";
+  document.getElementById("aplCue").textContent =
+    `Cue: ${apl.cueClock || (story.cue && story.cue.at) || "12:00"}`;
+  document.getElementById("aplMeta").textContent =
+    `${apl.timeSinceCue || "just now"} · ${apl.cueText || "camera cue"}`;
+  document.getElementById("aplBtns").innerHTML =
+    (apl.actions || []).map(a => `<i>${a.label}</i>`).join("");
+  const d = story.defer || {};
+  document.getElementById("deferLine").textContent = d.spoken || "I will try Sister instead.";
+  document.getElementById("deferDeadline").textContent =
+    `${d.deadline_sec || 90}s deadline`;
+  document.getElementById("failPhrase").textContent = story.sister_unanswered || "";
+  document.getElementById("dirBtns").innerHTML =
+    (story.direction_labels || []).map(x => `<i>${x}</i>`).join("");
+  const tryLabels = story.direction_labels || ["Try someone else", "Try again", "On my way", "False alarm", "Snooze"];
+  document.getElementById("tryBtns").innerHTML = tryLabels.map((x, i) => {
+    const label = x.charAt(0).toUpperCase() + x.slice(1);
+    const picked = label.toLowerCase() === "try someone else" || i === 0;
+    return `<i class="${picked ? "picked" : ""}">${label}</i>`;
+  }).join("");
+  document.getElementById("alexaHome").textContent = story.alexa_home || "Are you okay?";
+  document.getElementById("silentLine").textContent = "No answer came back from the house.";
+  const nr = story.neighbor_reason || {};
+  document.getElementById("neighborBody").textContent =
+    `Cue: ${nr.cue || "camera cue"}. Time: ${nr.when || ""}. Time since cue: ${nr.time_since_cue_sec || 0} seconds. ${nr.who_did_not_respond || ""}`;
+  document.getElementById("goingLine").textContent =
+    (story.neighbor_going && story.neighbor_going.phrase) || "Neighbor is going";
+  document.getElementById("okayReport").textContent =
+    (story.shes_okay && story.shes_okay.report) || "";
+  document.getElementById("statusSpoken").textContent =
+    (story.how_is_mum && story.how_is_mum.spoken) || "Here is the household status.";
+  const h = story.how_is_mum || {};
+  document.getElementById("statusBody").textContent =
+    `Last cue: ${h.last_cue || "camera cue"}. Last acknowledgment: ${String(h.last_acknowledgment || "").replaceAll("_", " ")}. Quiet since: ${h.quiet_since || "yes"}.`;
+  document.getElementById("routinePhrase").textContent =
+    (story.routine && story.routine.phrase) || "Suggested routine after three repeating windows.";
+  document.getElementById("rosterMsg").textContent = story.roster_message || "";
+  document.getElementById("pytestLine").textContent = story.pytest || "204 passed";
+}
+if (STORY && Object.keys(STORY).length) fill(STORY);
+window.showScene = show;
+window.fillStory = fill;
+</script>
+</body>
+</html>

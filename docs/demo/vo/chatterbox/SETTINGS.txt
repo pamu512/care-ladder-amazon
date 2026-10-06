@@ -1,0 +1,50 @@
+Chatterbox VO settings (reproduce with scripts/generate_amazon_demo_vo_chatterbox.sh)
+
+Not the ship voice. The shipped remux uses docs/demo/vo/edge/ (US English Neural).
+
+Engine: chatterbox-tts (Resemble AI), CPU, ChatterboxTTS.from_pretrained
+References (~15 to 16s of real speech, conversational, length matters most):
+  refs/narrator_ref.wav  edge-tts en-US-BrianMultilingualNeural (prompt only)
+  refs/alexa_ref.wav     edge-tts en-US-AvaNeural (prompt only)
+  refs/neighbor_ref.wav  edge-tts en-US-EmmaMultilingualNeural (prompt only)
+Edge-tts reference clips are never mixed into the final tape.
+
+Per-voice generate() (V4 knobs from the sister OpenCV demo):
+  Narrator  exaggeration=0.55  cfg_weight=0.38  temperature=0.80
+  Emotional mom lines (see seeds.tsv emotion=1):
+            exaggeration=0.62  cfg_weight=0.32  temperature=0.80
+  Alexa     exaggeration=0.30  cfg_weight=0.50  temperature=0.60
+            extra takes on "Are you okay?" (b08b)
+  Neighbor  exaggeration=0.45  cfg_weight=0.45  temperature=0.80
+            calm / relieved; extra takes on "I'm going." / "She's okay."
+
+Takes: 3 seeds per sentence (8 for b02/b08b/b10b/b11a, 6 for b05/b06/b14).
+Pick: whisper tiny.en WER match + highest f0 std + no clipping + no mid-phrase
+pause + no clipped last word. Then a duration sanity check.
+TTS text spells numbers (two hundred and four). Kaggle is spoken as Kaggle.
+Chosen seed recorded in seeds.tsv.
+Never slow or speed with atempo.
+
+Edit gaps (in beat assembly, not TTS):
+  0.20 to 0.35s between sentences (room tone, never digital zero)
+  ~0.45 to 0.50s at beat changes (crossfade, last frame held, no black tpad)
+Soft breaths from the model are kept; edge clicks only are trimmed.
+
+Mix (ffmpeg, same chain for TTS and docs/demo/vo/anoop/ overrides):
+  highpass 80 Hz
+  equalizer -2 dB at 300 Hz
+  presence +1.4 dB at 3500 Hz
+  acompressor threshold=-18dB ratio=2.5 attack=12 release=120
+  short room: aecho=0.8:0.88:36:0.18
+  Alexa extra: highpass 200 Hz, lowpass 6 kHz, +1.8 dB at 2 kHz
+  continuous room-tone bed (never digital zero)
+  loudness I=-16 LUFS, TP=-1.5, LRA=11
+  no hard noise gate, no atempo
+
+Music: original soft piano-like bed (docs/demo/vo/chatterbox/music.wav),
+no lyrics, generated for this tape (no third-party sample).
+Ducked to about -22 dB under speech; out on b01 (mom open);
+back from b11 (resolution).
+
+Anoop override: if docs/demo/vo/anoop/<clip>.wav exists, it replaces the
+narrator TTS clip and runs through the same processing chain.
