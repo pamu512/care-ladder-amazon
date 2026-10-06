@@ -68,7 +68,8 @@ VOICE = {
     },
 }
 
-# Warm conversational prompts, long enough for ~15-16s of real speech.
+# Warm conversational prompts. Over-long on purpose so a 16.2s trim is speech,
+# not silence (V4: reference length matters most).
 REF_PROMPTS = {
     "narrator_ref.wav": (
         "en-IN-PrabhatNeural",
@@ -77,7 +78,10 @@ REF_PROMPTS = {
         "when we made tea and talked about nothing in particular. "
         "The rain had just stopped, and the street was quiet. "
         "I like evenings like that, when nobody is in a hurry, "
-        "and we can just sit and listen to the fans.",
+        "and we can just sit and listen to the fans. "
+        "Tell me how your week has been, and whether you found time to rest. "
+        "I keep thinking about that walk to the shop, how we stood on the "
+        "corner and watched the buses go by, then came home and sat down.",
     ),
     "alexa_ref.wav": (
         "en-US-AvaNeural",
@@ -85,14 +89,18 @@ REF_PROMPTS = {
         "Hello. I can help with a quick check-in. Please say if you are okay, "
         "or if you need a moment. I will wait for your reply, and then I will "
         "let your family know. There is no rush. Take your time, and answer "
-        "when you are ready.",
+        "when you are ready. If you would like a glass of water, or if you "
+        "want me to try someone else, just say so. I am here, and I will "
+        "stay on until we know that you are fine.",
     ),
     "neighbor_ref.wav": (
         "en-IN-NeerjaNeural",
         "-10%",
         "Yes, I am nearby. I can walk over in a few minutes. Just tell me "
         "which house, and I will go now. It is no trouble at all. I will knock, "
-        "see that she is fine, and then I will call you back.",
+        "see that she is fine, and then I will call you back. "
+        "If the gate is locked I will wait by the steps, and I will not rush her. "
+        "These things take a moment, and that is all right with me.",
     ),
 }
 
@@ -277,23 +285,25 @@ def ensure_refs() -> None:
             )
             joined.replace(dest)
             more.unlink(missing_ok=True)
+        # Keep 15.2 to 16.2s of the speaking take. Do not pad with silence.
+        spoken = _speech_duration(dest)
         total = wav_duration(dest)
-        if total > 16.6:
-            tmp = dest.with_suffix(".trim.wav")
-            run(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-i",
-                    str(dest),
-                    "-t",
-                    "16.2",
-                    str(tmp),
-                ],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            tmp.replace(dest)
+        keep = 16.2 if spoken >= 15.0 or total >= 16.2 else max(15.2, min(16.2, total))
+        tmp = dest.with_suffix(".trim.wav")
+        run(
+            [
+                "ffmpeg",
+                "-y",
+                "-i",
+                str(dest),
+                "-t",
+                f"{keep:.2f}",
+                str(tmp),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        tmp.replace(dest)
         print(
             "  ref dur",
             f"{wav_duration(dest):.2f}s",
