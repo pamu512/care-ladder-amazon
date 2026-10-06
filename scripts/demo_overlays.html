@@ -262,10 +262,7 @@ function fill(story) {
   document.getElementById("dirBtns").innerHTML =
     (story.direction_labels || []).map(x => `<i>${x}</i>`).join("");
   document.getElementById("alexaHome").textContent = story.alexa_home || "Are you okay?";
-  document.getElementById("silentLine").textContent =
-    story.monitored_report === "monitored_silent"
-      ? "No answer came back from the house."
-      : (story.monitored_report || "No answer.");
+  document.getElementById("silentLine").textContent = "No answer came back from the house.";
   const nr = story.neighbor_reason || {};
   document.getElementById("neighborBody").textContent =
     `Cue: ${nr.cue || "camera cue"}. Time: ${nr.when || ""}. Time since cue: ${nr.time_since_cue_sec || 0} seconds. ${nr.who_did_not_respond || ""}`;

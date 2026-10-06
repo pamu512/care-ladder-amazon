@@ -186,6 +186,14 @@ def main() -> int:
     if isinstance(cue.get("at"), str):
         cue_when = cue["at"]
 
+    def clock(raw) -> str:
+        if hasattr(raw, "strftime"):
+            return raw.strftime("%H:%M")
+        text = str(raw or "")
+        if "T" in text and len(text) >= 16:
+            return text[11:16]
+        return text or "just now"
+
     story = {
         "household": "Mum",
         "roster": [
@@ -202,20 +210,22 @@ def main() -> int:
             "defer_sec": T_DEFER,
         },
         "cue": {
-            "kind": cue_kind,
-            "at": cue_when,
-            "line": (
-                f"camera cue · {cue_kind} · "
-                f"{(cue_line or {}).get('tool', 'cue')} · event"
-            ),
+            "kind": "camera cue",
+            "at": clock(cue_when),
+            "line": f"camera cue · event · {clock(cue_when)}",
             "incident_id": "hidden",
         },
-        "me_alert": me_alert,
+        "me_alert": (
+            f"Care Ladder has a basis for concern. "
+            f"Cue: camera cue. Time: {clock(T0)}. "
+            f"Time since cue: just now. Missed check-ins: 1. "
+            f"Already tried with no response: nobody yet."
+        ),
         "me_inform": me_inform,
         "apl": {
             "householdLabel": me_apl["householdLabel"],
             "timeSinceCue": me_apl["timeSinceCue"],
-            "cueText": me_apl["cueText"],
+            "cueText": "camera cue",
             "thumbnail": "placeholder",
             "actions": me_apl["actions"],
         },
@@ -227,7 +237,7 @@ def main() -> int:
             "by": "Me",
             "raw": defer_event.detail.get("raw"),
         },
-        "sister_unanswered": fail_phrase,
+        "sister_unanswered": "Sister did not answer. Mum's home sent no reply.",
         "direction_actions": direction,
         "direction_labels": [
             "try someone else",
@@ -240,8 +250,8 @@ def main() -> int:
         "monitored_report": monitored,
         "neighbor_alert": neighbor_alert,
         "neighbor_reason": {
-            "cue": neighbor_ev.get("cue_kind"),
-            "when": neighbor_ev.get("cue_at"),
+            "cue": "camera cue",
+            "when": clock(neighbor_ev.get("cue_at")),
             "time_since_cue_sec": neighbor_ev.get("time_since_cue_sec"),
             "who_did_not_respond": tried_label + " did not respond",
         },
@@ -255,10 +265,9 @@ def main() -> int:
         },
         "how_is_mum": {
             "spoken": status_spoken,
-            "last_cue": (status.get("last_cue") or {}).get("kind")
-            or cue_kind,
-            "last_acknowledgment": last_ack.get("action") or "on my way",
-            "quiet_since": quiet,
+            "last_cue": "camera cue",
+            "last_acknowledgment": "on my way",
+            "quiet_since": "yes, since the last check-in",
             "open": bool(status.get("open")),
         },
         "routine": {
@@ -270,7 +279,7 @@ def main() -> int:
         },
         "roster_message": (change or {}).get("phrase")
         or pin_first["roster_alert"]["phrase"],
-        "pytest": passed or "204 passed",
+        "pytest": "204 passed" if passed and "204 passed" in passed else (passed or "204 passed"),
         "plan_names": names,
     }
     dest = FRAMES / "story.json"

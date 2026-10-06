@@ -41,6 +41,8 @@ async function sanitizeFireTv(page) {
     hide("#cShowTools");
     hide(".audit");
     hide("#auditEvents");
+    hide("#incId");
+    hide(".inc-id");
     const walk = (node) => {
       if (node.nodeType === Node.TEXT_NODE) {
         node.nodeValue = node.nodeValue
@@ -48,7 +50,9 @@ async function sanitizeFireTv(page) {
           .replaceAll("\u2013", "-")
           .replaceAll(" — ", ", ")
           .replace(/\backed\b/gi, "acknowledged")
-          .replace(/\bfall\b/gi, "cue");
+          .replace(/\bfall\b/gi, "cue")
+          .replace(/\b[0-9a-f]{8}\b/gi, "")
+          .replace(/\s+·\s+·/g, " · ");
       } else if (node.childNodes) {
         node.childNodes.forEach(walk);
       }
