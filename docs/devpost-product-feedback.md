@@ -6,9 +6,10 @@ engineering log: [`docs/friction-log.md`](friction-log.md). Honesty for the
 optional chime: [`docs/proactive-events-honesty.md`](proactive-events-honesty.md).
 
 Every claim below is grounded in this repo (code, comments, configs, tests,
-scripts, docs, or commit messages). Lines that need the builder's personal
-experience are marked `[Anoop: fill in, ...]`. We do not invent device setup
-times, console signup, skill certification, or live Alexa mobile delivery.
+scripts, docs, or commit messages). Builder device and console notes are
+first person from Anoop. We do not invent beyond those notes. In-repo
+notify, APL render, Proactive Events, and dial paths stay simulated unless
+a line names a live step.
 
 **Simulator / stub policy:** if a path never called Amazon's live API, this
 doc says so. The demo that judges can run is local uvicorn plus
@@ -96,11 +97,12 @@ In-repo path (repo-proven): `pip install -e ".[dev]"` then
 `./scripts/amazon_demo_path.sh`. First useful output is the Fire TV page plus
 `ALEXA+ agent initialized (MCP Streamable HTTP)` on stdout.
 
-Live Alexa+ path (repo cannot show):
+Live Alexa+ path (my setup):
 
-- [Anoop: fill in, e.g. how long Alexa developer console signup took]
-- [Anoop: fill in, e.g. pairing a real Echo or Alexa+ preview device]
-- [Anoop: fill in, e.g. skill certification or publish steps, if any]
+- Amazon developer console signup took about 10 minutes.
+- I use Echo at home. I switched from Google Home because Google Home
+  stopped supporting BluOS devices.
+- I did not certify or publish a skill.
 
 **Would we build with it again, and why**
 
@@ -108,8 +110,8 @@ Yes for the **self-hosted MCP + documented simulator** shape. It is what the
 PRD allowed, it is what CI runs, and it is the only Alexa+ path that exists
 in this repo. We would not claim a live Alexa+ Agent Skill from this tree.
 
-[Anoop: fill in, e.g. whether you would file Alexa+ again after a real Echo
-or preview-tooling session]
+I would build on Alexa+ again. It seems like a capable platform and more
+friendly than Google Home.
 
 ---
 
@@ -156,31 +158,32 @@ Caregiver pager. Fire TV is the living-room timeline, not the pager
 
 **What needs work**
 
-- **No real Alexa mobile delivery.** Every notify/ack path sets
-  `simulated: true`. There is no Alexa Skills Kit package, no
-  interaction model, no SMAPI call, no push campaign.
+- **In-repo notify is still simulated.** Every notify/ack path in this tree
+  sets `simulated: true`. There is no Alexa Skills Kit package, no
+  interaction model, no SMAPI call, and no push campaign in the repo.
 - `SpeakerSimulator` and MCP `request_call` (`note: "demo_stub_no_real_dial"`)
   stand in for the phone hop. Reserved fiction only: `+12125550176`
   (`(555) 010-2276`) in `configs/amazon_demo_home.yaml`.
-- We cannot say a caregiver phone lit up. The Fire TV "Family informed on
-  Alexa mobile" line is copy that mirrors the audit trail
-  (`tests/test_firetv_app.py`).
+- The Fire TV "Family informed on Alexa mobile" line is copy that mirrors
+  the audit trail (`tests/test_firetv_app.py`). That line is not itself
+  the live push.
 
 **Onboarding (zero to hello world)**
 
 In-repo: after the API is up, `python -m care_ladder.mcp_server.alexa_sim --url http://127.0.0.1:8010 --caregiver-answer "I'm on it"`
 exercises notify then ack on the same incident.
 
-Live path (repo cannot show):
-
-- [Anoop: fill in, e.g. whether a live Alexa mobile notify ever arrived on a phone]
+I did not get a real Alexa mobile notification on my phone before this
+project. During this project a real Alexa mobile notification did reach
+my phone.
 
 **Would we build with it again, and why**
 
 Yes as the **product model** (pager on the phone, TV as timeline). The FSM
-and inform-card slots are reusable. We would not ship this notify path as
-"Alexa mobile" to a family until a real skill session or push actually
-lands. This repo has not done that.
+and inform-card slots are reusable. I did get a real Alexa mobile
+notification on my phone during this project. The in-repo `notify_caretaker`
+path is still a simulator (`simulated: true`). We would not treat the
+repo stub as the production pager.
 
 ---
 
@@ -218,8 +221,9 @@ skill package.
 
 **What needs work**
 
-- **Never rendered on a device.** There is no APL authoring tool use, no
-  `Alexa.Presentation.APL` directive, no APL preview. The JSON is stored
+- **Never rendered on a device.** The in-repo path does not send an
+  `Alexa.Presentation.APL` directive. I previewed APL in the developer
+  console, not on Echo Show or Fire TV. The JSON in this tree is stored
   on the incident and returned to the MCP client.
 - Thumbnail is a string ref (`blurred:{incident_id}` or
   `last-frame-placeholder`), not a hosted image URL a real APL `Image`
@@ -233,16 +237,14 @@ skill package.
 In-repo: `from care_ladder.channels.apl_notify import apl_notify_card` and
 call it (see `tests/test_apl_notify.py`). Zero Amazon console steps.
 
-Live APL hello world (repo cannot show):
-
-- [Anoop: fill in, e.g. first APL authoring or device preview, if any]
+I previewed APL in the developer console, not on a device.
 
 **Would we build with it again, and why**
 
 Yes as a **schema for the notify card**, because it gave us a named Amazon
-document type without blocking the demo on console publish. We would not
-call this "an APL experience" until something actually renders
-`APL_DOCUMENT` on Echo Show or the APL previewer.
+document type without blocking the demo on console publish. I previewed
+APL in the developer console, not on a device. We would not call the
+in-repo JSON an on-device APL experience.
 
 ---
 
@@ -282,7 +284,7 @@ Optional awareness chime only. Not the pager.
 - Schema-locked catalogs cannot carry the three caregiver actions. Those
   stay in the skill-session inform card. High severity if a demo claimed
   otherwise (friction log).
-- [Anoop: fill in, e.g. whether a live Proactive Events catalog was ever approved]
+- I did not apply for a live Proactive Events catalog, as far as I recall.
 
 **Onboarding (zero to hello world)**
 
@@ -358,10 +360,11 @@ In-repo: start the API, open `http://127.0.0.1:8010/firetv/`. Demo console
 is bottom right. No Fire OS SDK, no Vega OS package, no Web App Tester
 project file.
 
-Live device (repo cannot show):
+My device notes:
 
-- [Anoop: fill in, e.g. time to boot a Fire TV stick on Silk vs Chromium fallback]
-- [Anoop: fill in, e.g. official Amazon Fire TV / Web App Tester experience]
+- I do not have a real Fire TV stick.
+- I did not use the official Amazon Fire TV / Web App Tester, as far as
+  I recall.
 
 **Would we build with it again, and why**
 
@@ -418,9 +421,8 @@ deploy from this repo.
 In-repo: none required. Local demo needs no AWS credentials
 (`./scripts/run_demo.sh`).
 
-Live stack (this repo does not provision it on CI):
-
-- [Anoop: fill in, e.g. first AWS account / IAM / ECS deploy time for the shared opencv stack]
+My first AWS deploy (ECS / CloudFront) was easy. This repo's CI still
+does not provision that stack.
 
 **Would we build with it again, and why**
 
@@ -611,7 +613,7 @@ Default voice id `8499aae3-022c-4d55-8283-0c2e8adbefb4` (public voice
 id, not a secret). Intermediates `docs/demo/vo/` are gitignored.
 `docs/demo/README.md`: shipped mp4 was remuxed with spoken VO.
 
-[Anoop: fill in, e.g. Cartesia console signup and first Sonic clip]
+Cartesia signup was smooth.
 
 ### Kaggle API (fall-frame classifier, optional)
 
@@ -623,7 +625,7 @@ committed. `data/kaggle/` and `models/*.npz` are gitignored.
 missing." Tests cover parse/train/load without the zip
 (`tests/test_fall_train.py`).
 
-[Anoop: fill in, e.g. Kaggle token setup and first dataset download]
+Kaggle token setup was smooth.
 
 ### OpenCV
 

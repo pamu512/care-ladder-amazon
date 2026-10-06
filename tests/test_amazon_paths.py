@@ -127,12 +127,12 @@ def test_devpost_product_feedback_names_amazon_tools_and_has_no_em_dash():
         "simulated",
         "Other tools",
         "Built With",
-        "[Anoop: fill in",
         "Ring",
         "Bee",
     ):
         assert needed in text, needed
-    assert text.count("[Anoop: fill in") >= 8
+    assert "[Anoop: fill in" not in text
+    assert "a real Alexa mobile notification did reach" in text
 
 
 def test_amazon_demo_path_script_is_the_one_story():
