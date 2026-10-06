@@ -344,10 +344,13 @@ def process_wav(src: Path, dest: Path, kind: str, room: Path) -> None:
             "acompressor=threshold=-16dB:ratio=2.2:attack=8:release=80:makeup=1.5",
             "aecho=0.8:0.88:36:0.18",
         ]
-    # gentle edge trim that keeps a breath; do not gate to digital zero
+    # Trim only leading/trailing clicks. stop_periods=1 would cut at the
+    # first inter-sentence breath and drop the rest of the beat.
     filters.append(
-        "silenceremove=start_periods=1:start_threshold=-38dB:start_silence=0.08:"
-        "stop_periods=1:stop_threshold=-40dB:stop_silence=0.14"
+        "silenceremove=start_periods=1:start_threshold=-44dB:start_silence=0.05,"
+        "areverse,"
+        "silenceremove=start_periods=1:start_threshold=-44dB:start_silence=0.08,"
+        "areverse"
     )
     chain = ",".join(filters)
     tmp = dest.with_suffix(".proc.wav")
@@ -481,6 +484,20 @@ def anoop_override(clip: str) -> Path | None:
     return None
 
 
+def reprocess_concats(room: Path) -> None:
+    """Re-run the mix chain on existing sentence concats (no TTS)."""
+    rows = read_lines()
+    for clip, speaker, _text in rows:
+        raw = TAKES_DIR / f"{clip}_concat.wav"
+        dest = VO / f"{clip}.wav"
+        if not raw.is_file():
+            continue
+        if ONLY and clip != ONLY:
+            continue
+        process_wav(raw, dest, VOICE[speaker]["eq"], room)
+        print("reprocessed", dest, f"{wav_duration(dest):.2f}s")
+
+
 def main() -> int:
     if not LINES.is_file():
         print(f"missing {LINES}", file=sys.stderr)
@@ -490,6 +507,10 @@ def main() -> int:
     ensure_refs()
     room = ensure_room()
     ensure_music()
+    if os.environ.get("REPROCESS", "0") == "1":
+        reprocess_concats(room)
+        print("VO wavs in", VO)
+        return 0
 
     rows = read_lines()
     if ONLY:

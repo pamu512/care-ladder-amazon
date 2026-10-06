@@ -183,11 +183,21 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
     inter.append(g)
     total += d + g
 
-# Shrink inter-beat gaps if we would blow the 180s cap.
-if total > 178.5:
-    scale = max(0.15, (178.5 - sum(dur(work / f"{b}.wav") for b, _, _ in BEATS)) / max(sum(inter), 0.01))
-    inter = [g * scale for g in inter]
-    print("scaled inter-beat gaps by", round(scale, 3))
+# Fit under 180s: first shrink gaps, then a light atempo if speech is long.
+speech = sum(dur(work / f"{b}.wav") for b, _, _ in BEATS)
+if speech + sum(inter) > 176.5:
+    scale = max(0.12, (176.5 - speech) / max(sum(inter), 0.01))
+    if scale < 1:
+        inter = [g * min(1.0, scale) for g in inter]
+        print("scaled inter-beat gaps by", round(min(1.0, scale), 3))
+if speech + sum(inter) > 176.5:
+    rate = min(1.12, (speech + sum(inter)) / 174.0)
+    print("atempo", round(rate, 3), "to fit 3:00")
+    for beat, _, _ in BEATS:
+        src = work / f"{beat}.wav"
+        tmp = work / f"{beat}_fit.wav"
+        ff("-i", str(src), "-af", f"atempo={rate:.4f}", str(tmp))
+        tmp.replace(src)
 
 for i, (beat, _w, pngs) in enumerate(BEATS):
     beat_wav = work / f"{beat}.wav"
