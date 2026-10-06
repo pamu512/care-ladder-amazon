@@ -112,6 +112,29 @@ def test_friction_log_covers_demo_video_surfaces():
     assert text.lower().count("suggestion") >= 4
 
 
+def test_devpost_product_feedback_names_amazon_tools_and_has_no_em_dash():
+    """Devpost per-tool draft: named Amazon surfaces, honesty, no em dashes."""
+    text = Path("docs/devpost-product-feedback.md").read_text()
+    assert "—" not in text and "–" not in text
+    for needed in (
+        "Alexa+",
+        "Alexa mobile",
+        "Alexa Presentation Language",
+        "Proactive Events",
+        "Fire TV",
+        "CloudFront",
+        "DynamoDB",
+        "simulated",
+        "Other tools",
+        "Built With",
+        "[Anoop: fill in",
+        "Ring",
+        "Bee",
+    ):
+        assert needed in text, needed
+    assert text.count("[Anoop: fill in") >= 8
+
+
 def test_amazon_demo_path_script_is_the_one_story():
     text = Path("scripts/amazon_demo_path.sh").read_text()
     assert "don't worry" in text

@@ -1,3 +1,4 @@
+.env
 models/*.onnx
 models/*.npz
 data/kaggle/
