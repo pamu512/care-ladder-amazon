@@ -106,7 +106,10 @@ MUSIC_GAIN = {
     "b14": 0.30,
     "b15": 0.32,
 }
-BEAT_XFADE = 0.45
+BEAT_XFADE = 0.40
+# Solid hold after each beat, longer than the xfade so leftover text
+# cannot sit in the overlap window (frame rounding can eat ~0.15s).
+BEAT_CLEAR = 0.70
 ROOM_MIX = 0.18
 
 
@@ -289,8 +292,8 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
     beat_wav = work / f"{beat}.wav"
     concat_audio(wavs, beat_wav, beat, room)
     d = dur(beat_wav)
-    # Hold the last frame through the beat-change crossfade. Never a black tpad.
-    tail = BEAT_XFADE if i < len(BEATS) - 1 else 0.0
+    # Solid hold, then crossfade. Never a black tpad and never a cloned last card.
+    tail = BEAT_CLEAR if i < len(BEATS) - 1 else 0.0
     if tail > 0.05:
         pad = work / f"{beat}_pad.wav"
         ff(
