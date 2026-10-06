@@ -324,18 +324,6 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
         )
         parts.append(still)
         offset += slen
-    # Crossfade onto a solid card so prior text never sits under the next card.
-    if tail > 0.05:
-        clear = work / f"{beat}_clear.mp4"
-        ff(
-            "-f", "lavfi", "-i", "color=c=0x1E1C18:s=1280x720:r=15",
-            "-t", f"{tail:.3f}",
-            "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
-            "-crf", "18",
-            "-an",
-            str(clear),
-        )
-        parts.append(clear)
     vis = work / f"{beat}_vis.mp4"
     if len(parts) == 1:
         ff("-i", str(parts[0]), "-c", "copy", str(vis))
@@ -343,6 +331,17 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
         lst = work / f"{beat}_vis.txt"
         lst.write_text("".join(f"file '{p}'\n" for p in parts))
         ff("-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(vis))
+    # Solid tail (not a cloned last frame) so the next card fades up on empty bg.
+    if tail > 0.05:
+        cleared = work / f"{beat}_vis_clear.mp4"
+        ff(
+            "-i", str(vis),
+            "-vf", f"tpad=stop_mode=add:stop_duration={tail:.3f}:color=0x1E1C18",
+            "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+            "-crf", "18", "-an", "-r", "15", "-s", "1280x720",
+            str(cleared),
+        )
+        vis = cleared
     mixed = work / f"{beat}_mix.mp4"
     mix_beat(vis, beat_wav, mixed, MUSIC_GAIN[beat], music, room)
     clips.append(mixed)
