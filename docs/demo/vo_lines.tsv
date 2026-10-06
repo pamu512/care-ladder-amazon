@@ -5,7 +5,7 @@ b04	N	My family sets the order. Me, my wife, my sister, then our neighbor, who l
 b05	N	A camera cue or a missed routine starts the ladder. The camera only acts on cues, so nobody watches a feed. The model was trained on a public Kaggle dataset.
 b06	N	Here's the alert on my phone, through Alexa Plus. It tells me why. The cue, the time, how long ago, any missed check-ins. The buttons on screen match what I can say.
 b07a	N	Alexa, call my sister instead.
-b07b	N	I'm stuck in a meeting, so I pass it to my sister.
+b07b	N	I'm stuck in a meeting. So I pass it to my sister.
 b08a	N	My sister doesn't answer. So Alexa Plus does two things at once. It asks me what to do next.
 b08b	A	Are you okay?
 b08c	N	And it asks Mom. Whatever she says, okay, needs help, or nothing, comes straight back to me.

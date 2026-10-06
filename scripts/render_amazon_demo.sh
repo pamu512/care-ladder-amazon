@@ -72,7 +72,7 @@ work.mkdir(parents=True, exist_ok=True)
 BEATS = [
     ("b01", ["b01.wav"], ["b01_map.png"]),
     ("b02", ["b02.wav"], ["b02_missed.png", "b02_battery.png", "b02_call.png", "b02_camera.png"]),
-    ("b03", ["b03.wav"], ["b03_title.png"]),
+    ("b03", ["b03.wav"], ["b03_title.png", "b03_title_in.png"]),
     ("b04", ["b04.wav"], ["b04_ladder.png"]),
     ("b05", ["b05.wav"], ["b05_cue.png"]),
     ("b06", ["b06.wav"], ["b06_notify.png", "b06_apl.png"]),
@@ -108,10 +108,12 @@ MUSIC_GAIN = {
 }
 BEAT_XFADE = 0.36
 # Solid hold after each beat, longer than the xfade so leftover text
-# cannot sit in the overlap window. Opening VO is longer; keep the
-# clear short enough to stay under 3:00.
-BEAT_CLEAR = 0.52
+# cannot sit in the overlap window.
+BEAT_CLEAR = 0.62
 ROOM_MIX = 0.18
+# Extra room-tone hold so routine / architecture stills linger (headroom to 2:45-2:55).
+HOLD_EXTRA = {"b12": 5.0, "b14": 5.5, "b03": 0.6}
+KEN_BURNS = {"b03", "b08"}
 
 
 def dur(path: Path) -> float:
@@ -172,9 +174,72 @@ def load_sent_durs(path: Path) -> dict[str, list[float]]:
     return out
 
 
+def encode_still(png: Path, dest: Path, slen: float, kenburns: bool) -> None:
+    if kenburns and slen >= 0.8:
+        n = max(8, int(round(slen * 15)))
+        vf = (
+            f"scale=1536:864,"
+            f"zoompan=z='min(1.0+0.10*on/{n},1.10)':"
+            f"x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':"
+            f"d=1:s=1280x720:fps=15"
+        )
+        ff(
+            "-loop", "1", "-i", str(png),
+            "-vf", vf,
+            "-frames:v", str(n),
+            "-c:v", "libx264", "-pix_fmt", "yuv420p",
+            "-crf", "18", "-r", "15", "-an",
+            str(dest),
+        )
+        return
+    ff(
+        "-loop", "1", "-i", str(png),
+        "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
+        "-crf", "18", "-b:v", "1200k",
+        "-t", f"{slen:.3f}", "-r", "15", "-s", "1280x720",
+        "-an",
+        str(dest),
+    )
+
+
+def xfade_video(clips: list[Path], durs: list[float], dest: Path, fade: float) -> None:
+    if len(clips) == 1:
+        ff("-i", str(clips[0]), "-c", "copy", str(dest))
+        return
+    fade = min(fade, min(durs) - 0.05) if durs else fade
+    fade = max(0.12, fade)
+    inputs = []
+    for c in clips:
+        inputs += ["-i", str(c)]
+    vprev = "[0:v]"
+    filt = []
+    acc = durs[0]
+    for i in range(1, len(clips)):
+        offset = max(0.05, acc - fade)
+        vout = f"[vx{i}]"
+        filt.append(
+            f"{vprev}[{i}:v]xfade=transition=fade:duration={fade:.3f}:offset={offset:.3f}{vout}"
+        )
+        vprev = vout
+        acc = acc + durs[i] - fade
+    ff(
+        *inputs,
+        "-filter_complex", ";".join(filt),
+        "-map", vprev,
+        "-c:v", "libx264", "-pix_fmt", "yuv420p",
+        "-crf", "18", "-an", "-r", "15", "-s", "1280x720",
+        str(dest),
+    )
+
+
 def still_lens(beat: str, d: float, n: int, sent: dict[str, list[float]]) -> list[float]:
     if n <= 1:
         return [d]
+    if beat == "b03" and n == 2:
+        fade = 0.85
+        total = d + fade
+        a = max(0.9, total * 0.38)
+        return [a, max(0.9, total - a)]
     if beat == "b02" and n >= 4 and "b02" in sent and sent["b02"]:
         # missed camera, dead phone, Neighbor ringing, camera off
         sents = sent["b02"]
@@ -301,6 +366,22 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
     still_for_sheet.append(png_paths[0])
     beat_wav = work / f"{beat}.wav"
     concat_audio(wavs, beat_wav, beat, room)
+    extra = HOLD_EXTRA.get(beat, 0.0)
+    if extra > 0.05:
+        held = work / f"{beat}_hold.wav"
+        ff(
+            "-i", str(beat_wav),
+            "-stream_loop", "-1", "-i", str(room),
+            "-filter_complex",
+            (
+                f"[0]apad=pad_dur={extra:.3f}[v];"
+                f"[1]volume={ROOM_MIX:.3f}[r];"
+                "[v][r]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[a]"
+            ),
+            "-map", "[a]",
+            str(held),
+        )
+        beat_wav = held
     d = dur(beat_wav)
     # Solid hold, then crossfade. Never a black tpad and never a cloned last card.
     tail = BEAT_CLEAR if i < len(BEATS) - 1 else 0.0
@@ -327,19 +408,14 @@ for i, (beat, wav_names, pngs) in enumerate(BEATS):
     for j, png in enumerate(png_paths):
         slen = lens[j] if j < len(lens) else max(0.2, (d - tail) - offset)
         still = work / f"{beat}_{j}.mp4"
-        ff(
-            "-loop", "1", "-i", str(png),
-            "-c:v", "libx264", "-tune", "stillimage", "-pix_fmt", "yuv420p",
-            "-crf", "18", "-b:v", "1200k",
-            "-t", f"{slen:.3f}", "-r", "15", "-s", "1280x720",
-            "-an",
-            str(still),
-        )
+        encode_still(png, still, slen, beat in KEN_BURNS)
         parts.append(still)
         offset += slen
     vis = work / f"{beat}_vis.mp4"
     if len(parts) == 1:
         ff("-i", str(parts[0]), "-c", "copy", str(vis))
+    elif beat == "b03":
+        xfade_video(parts, lens[: len(parts)], vis, 0.85)
     else:
         lst = work / f"{beat}_vis.txt"
         lst.write_text("".join(f"file '{p}'\n" for p in parts))

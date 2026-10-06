@@ -10,6 +10,9 @@ Per-voice:
 Granularity: one edge-tts call per sentence. The cue list is generated
 clause by clause so the commas are audible.
 Gaps: 0.28 to 0.42s between sentences; 0.48 to 0.60s after mom lines.
+Opening story (b01-b03): 0.45 to 0.60s, 0.70 to 0.85s after mom lines.
+Routine and architecture (b12, b14): 0.55 to 0.80s between sentences.
+Kaggle / meeting / M C P lines use a slightly slower rate.
 Trailing TTS pad is trimmed from the end only (stop_periods=-1).
 Never atempo.
 

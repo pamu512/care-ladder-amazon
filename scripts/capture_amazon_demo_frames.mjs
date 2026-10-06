@@ -43,6 +43,12 @@ async function sanitizeFireTv(page) {
     hide("#auditEvents");
     hide("#incId");
     hide(".inc-id");
+    document.querySelectorAll("button, .btn, .actions *").forEach((el) => {
+      const t = (el.textContent || "");
+      if (/\(555\)/.test(t) || /55501/.test(t) || /010-2276/.test(t)) {
+        el.style.display = "none";
+      }
+    });
     const walk = (node) => {
       if (node.nodeType === Node.TEXT_NODE) {
         node.nodeValue = node.nodeValue
@@ -51,8 +57,15 @@ async function sanitizeFireTv(page) {
           .replaceAll(" — ", ", ")
           .replace(/\backed\b/gi, "acknowledged")
           .replace(/\bfall\b/gi, "cue")
+          .replace(/\bResident's home\b/g, "Mom's home")
+          .replace(/\bResident\b/g, "Mom")
+          .replace(/\bresident\b/g, "Mom")
+          .replace(/\(555\)\s*010-2276/g, "")
+          .replace(/\+1 ?212 ?555 ?0176/g, "")
           .replace(/\b[0-9a-f]{8}\b/gi, "")
-          .replace(/\s+·\s+·/g, " · ");
+          .replace(/\s+·\s+·/g, " · ")
+          .replace(/\s+·\s*$/g, "")
+          .replace(/Request call\s*·\s*/g, "Request call");
       } else if (node.childNodes) {
         node.childNodes.forEach(walk);
       }
@@ -140,6 +153,14 @@ async function main() {
     await page.evaluate((sid) => window.showScene(sid), id);
     await new Promise((r) => setTimeout(r, 120));
     await shot(page, name);
+    if (name === "b03_title") {
+      await page.evaluate(() => {
+        const sub = document.getElementById("titleSub");
+        if (sub) sub.classList.add("in");
+      });
+      await new Promise((r) => setTimeout(r, 80));
+      await shot(page, "b03_title_in");
+    }
   }
 
   // Live Fire TV ambient view (supporting surface). Sanitize copy first.

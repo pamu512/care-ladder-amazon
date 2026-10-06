@@ -195,6 +195,11 @@ def main() -> int:
             return text[11:16]
         return text or "just now"
 
+    # One on-screen clock for every cue/alert/APL card: the live simulator value.
+    cue_clock = clock(cue_when)
+    if cue_clock in {"", "just now"}:
+        cue_clock = clock(T0)
+
     story = {
         "household": "Mom",
         "timezones": {
@@ -218,13 +223,13 @@ def main() -> int:
         },
         "cue": {
             "kind": "camera cue",
-            "at": clock(cue_when),
-            "line": f"camera cue · event · {clock(cue_when)}",
+            "at": cue_clock,
+            "line": f"camera cue · event · {cue_clock}",
             "incident_id": "hidden",
         },
         "me_alert": (
             f"Care Ladder has a basis for concern. "
-            f"Cue: camera cue. Time: {clock(T0)}. "
+            f"Cue: camera cue. Time: {cue_clock}. "
             f"Time since cue: just now. Missed check-ins: 1. "
             f"Already tried with no response: nobody yet."
         ),
@@ -238,7 +243,7 @@ def main() -> int:
             "timeSinceCue": me_apl["timeSinceCue"],
             "cueText": "camera cue",
             "thumbnail": "home-icon",
-            "cueClock": "10:42",
+            "cueClock": cue_clock,
             "actions": me_apl["actions"],
         },
         "defer": {
@@ -263,7 +268,7 @@ def main() -> int:
         "neighbor_alert": neighbor_alert,
         "neighbor_reason": {
             "cue": "camera cue",
-            "when": clock(neighbor_ev.get("cue_at")),
+            "when": cue_clock,
             "time_since_cue_sec": neighbor_ev.get("time_since_cue_sec"),
             "who_did_not_respond": tried_label + " did not respond",
         },

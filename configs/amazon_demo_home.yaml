@@ -43,9 +43,9 @@ rungs:
     tool: alexa_checkin
     params:
       attempts: 2
-      prompt_1: "Resident, are you okay?"
-      prompt_2: "Resident, it's the primary contact's Care Ladder - can you hear me?"
-      occlusion_prompt: "Resident, the camera is covered - could you move the blanket?"
+      prompt_1: "Mom, are you okay?"
+      prompt_2: "Mom, it's the primary contact's Care Ladder - can you hear me?"
+      occlusion_prompt: "Mom, the camera is covered - could you move the blanket?"
   - id: wait_window
     tool: wait_window
     params: { sec: 45 }

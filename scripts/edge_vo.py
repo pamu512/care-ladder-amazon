@@ -96,16 +96,45 @@ def clip_hash(clip: str, idx: int, text: str) -> int:
     return int(h[:8], 16)
 
 
-def gap_after(clip: str, idx: int, text: str, n_sent: int) -> float:
-    """Tight sentence gaps so the longer opening still fits under 3:00.
+OPENING = {"b01", "b02", "b03"}
+SLOW = {"b12", "b14"}
 
-    Base 0.18 to 0.28s; 0.38 to 0.50s after mom lines. Never atempo.
+
+def gap_after(clip: str, idx: int, text: str, n_sent: int) -> float:
+    """Sentence gaps. Never atempo.
+
+    Opening story is a touch longer. Learned-routine and architecture
+    get 0.55 to 0.80s between sentences. Mom lines stay longer than the rest.
     """
     _ = n_sent
     h = clip_hash(clip, idx, "gap")
+    if clip in SLOW:
+        return 0.55 + (h % 26) / 100.0
+    if clip in OPENING:
+        if MOM_RE.search(text):
+            return 0.70 + (h % 16) / 100.0
+        return 0.45 + (h % 16) / 100.0
     if MOM_RE.search(text):
         return 0.48 + (h % 13) / 100.0
     return 0.28 + (h % 15) / 100.0
+
+
+def line_rate(clip: str, idx: int, sent: str, default: str) -> str:
+    if clip == "b05" and "Kaggle" in sent:
+        return "-8%"
+    if clip == "b07b":
+        return "-6%"
+    if clip == "b14" and idx == 0:
+        return "-8%"
+    return default
+
+
+def tts_text(clip: str, idx: int, sent: str) -> str:
+    if clip == "b05" and "Kaggle" in sent:
+        return "The model was trained on a public Kaggle dataset."
+    if clip == "b14" and idx == 0:
+        return "Alexa Plus talks to my own M. C. P. server."
+    return sent
 
 
 def write_timings(rows: list[tuple[str, int, float]]) -> None:
@@ -417,10 +446,16 @@ def anoop_override(clip: str) -> Path | None:
 def selfcheck() -> int:
     bits = split_sentences("The cue, the time, how long ago, any missed check-ins.")
     assert bits[0] == "The cue," and bits[1] == "the time,"
-    g = gap_after("b03", 0, "x", 2)
+    g = gap_after("b04", 0, "x", 2)
     assert 0.28 <= g <= 0.43
+    go = gap_after("b03", 0, "x", 2)
+    assert 0.45 <= go <= 0.61
+    gs = gap_after("b12", 0, "x", 4)
+    assert 0.55 <= gs <= 0.81
     gm = gap_after("b01", 1, "So when something happens to my mom, we only find out.", 2)
-    assert 0.48 <= gm <= 0.61
+    assert 0.70 <= gm <= 0.86
+    assert line_rate("b05", 2, "The model was trained on a public Kaggle dataset.", "-5%") == "-8%"
+    assert line_rate("b14", 0, "Alexa Plus talks to my own M C P server.", "-5%") == "-8%"
     src = Path(__file__).read_text()
     settings = VO / "SETTINGS.txt"
     blobs = [src]
@@ -518,8 +553,10 @@ def main() -> int:
         assembled: list[tuple[Path, float]] = []
         for idx, sent in enumerate(sentences):
             take = TAKES_DIR / f"{clip}_s{idx}.wav"
-            print(f"tts {clip} sent={idx} {cfg['voice']} {sent[:70]}")
-            _edge_tts_wav(cfg["voice"], cfg["rate"], sent, take)
+            spoken = tts_text(clip, idx, sent)
+            rate = line_rate(clip, idx, sent, cfg["rate"])
+            print(f"tts {clip} sent={idx} {cfg['voice']} {rate} {spoken[:70]}")
+            _edge_tts_wav(cfg["voice"], rate, spoken, take)
             trimmed = TAKES_DIR / f"{clip}_s{idx}_trim.wav"
             trim_take(take, trimmed)
             timing_out.append((clip, idx, wav_duration(trimmed)))

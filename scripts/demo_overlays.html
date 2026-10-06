@@ -99,6 +99,8 @@ h2 { font-size: 28px; font-weight: 600; color: var(--sage); }
 .arch div { background: #35322A; border-radius: 14px; padding: 22px; font-size: 22px; text-align: center; }
 .center { text-align: center; padding-top: 180px; }
 .legal { position: absolute; bottom: 64px; left: 0; right: 0; text-align: center; color: var(--faint); font-size: 16px; }
+.title-sub { opacity: 0.22; }
+.title-sub.in { opacity: 1; }
 </style>
 </head>
 <body>
@@ -129,7 +131,7 @@ h2 { font-size: 28px; font-weight: 600; color: var(--sage); }
 <div id="title" class="scene">
   <div class="card center" style="padding-top:190px">
     <h1>Care Ladder.</h1>
-    <h2 style="margin-top:12px">Family check-ins with Alexa+.</h2>
+    <h2 id="titleSub" class="title-sub" style="margin-top:12px">Family check-ins with Alexa+.</h2>
   </div>
 </div>
 <div id="ladder_setup" class="scene">
@@ -164,7 +166,7 @@ h2 { font-size: 28px; font-weight: 600; color: var(--sage); }
         <path fill="#A8B5A0" d="M32 10 L58 32 H50 V54 H14 V32 H6 Z"/>
         <rect fill="#2E2B25" x="27" y="38" width="10" height="16"/>
       </svg>
-      <div class="cue" id="aplCue">Cue: 10:42</div>
+      <div class="cue" id="aplCue">Cue: 12:00</div>
     </div>
     <h2 id="aplHouse" style="margin-top:16px"></h2>
     <p class="sub" id="aplMeta"></p>
@@ -326,7 +328,7 @@ function fill(story) {
   setTxt("tzEU", tz.eu);
   document.getElementById("aplHouse").textContent = apl.householdLabel || "Mom";
   document.getElementById("aplCue").textContent =
-    `Cue: ${apl.cueClock || (story.cue && story.cue.at) || "10:42"}`;
+    `Cue: ${apl.cueClock || (story.cue && story.cue.at) || "12:00"}`;
   document.getElementById("aplMeta").textContent =
     `${apl.timeSinceCue || "just now"} · ${apl.cueText || "camera cue"}`;
   document.getElementById("aplBtns").innerHTML =
