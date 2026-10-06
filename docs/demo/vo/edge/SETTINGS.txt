@@ -1,0 +1,30 @@
+Edge-tts VO settings (reproduce with scripts/generate_amazon_demo_vo_edge.sh)
+
+US English Neural voices only. Never an Indian-accent stock voice.
+
+Per-voice:
+  Narrator  en-US-BrianMultilingualNeural  rate -5%
+  Alexa     en-US-AvaNeural                rate +0%  (small-speaker EQ after)
+  Neighbor  en-US-EmmaMultilingualNeural   rate -8%  (calm)
+
+Granularity: one edge-tts call per sentence. The cue list is generated
+clause by clause so the commas are audible.
+Gaps: 0.30 to 0.50s between sentences; 0.65 to 0.85s after mom lines.
+Never atempo.
+
+TTS text spells numbers (two hundred and four). Kaggle is spoken as Kaggle.
+Alexa+ is spoken Alexa Plus. MCP is spoken M C P.
+
+Mix (same chain for TTS and docs/demo/vo/anoop/ overrides):
+  highpass 80 Hz
+  equalizer -2 dB at 300 Hz
+  presence +1.4 dB at 3500 Hz
+  acompressor threshold=-18dB ratio=2.5 attack=12 release=120
+  short room: aecho=0.8:0.88:36:0.18
+  Alexa extra: highpass 200 Hz, lowpass 6 kHz, +1.8 dB at 2 kHz
+  150 ms tail fade (no hard trim inside the last word)
+  continuous room-tone bed (never digital zero)
+  loudness I=-16 LUFS, TP=-1.5, LRA=11
+
+Music: original soft piano-like bed (docs/demo/vo/edge/music.wav),
+ducked under speech; out on b01; back from b11.

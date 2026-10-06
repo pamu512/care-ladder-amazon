@@ -1,15 +1,17 @@
 Chatterbox VO settings (reproduce with scripts/generate_amazon_demo_vo_chatterbox.sh)
 
+Not the ship voice. The shipped remux uses docs/demo/vo/edge/ (US English Neural).
+
 Engine: chatterbox-tts (Resemble AI), CPU, ChatterboxTTS.from_pretrained
 References (~15 to 16s of real speech, conversational, length matters most):
-  refs/narrator_ref.wav  edge-tts en-IN-PrabhatNeural (prompt only)
+  refs/narrator_ref.wav  edge-tts en-US-BrianMultilingualNeural (prompt only)
   refs/alexa_ref.wav     edge-tts en-US-AvaNeural (prompt only)
-  refs/neighbor_ref.wav  edge-tts en-IN-NeerjaNeural (prompt only)
-Edge-tts clips are never mixed into the final tape.
+  refs/neighbor_ref.wav  edge-tts en-US-EmmaMultilingualNeural (prompt only)
+Edge-tts reference clips are never mixed into the final tape.
 
 Per-voice generate() (V4 knobs from the sister OpenCV demo):
   Narrator  exaggeration=0.55  cfg_weight=0.38  temperature=0.80
-  Emotional mum lines (see seeds.tsv emotion=1):
+  Emotional mom lines (see seeds.tsv emotion=1):
             exaggeration=0.62  cfg_weight=0.32  temperature=0.80
   Alexa     exaggeration=0.30  cfg_weight=0.50  temperature=0.60
             extra takes on "Are you okay?" (b08b)
@@ -19,7 +21,7 @@ Per-voice generate() (V4 knobs from the sister OpenCV demo):
 Takes: 3 seeds per sentence (8 for b02/b08b/b10b/b11a, 6 for b05/b06/b14).
 Pick: whisper tiny.en WER match + highest f0 std + no clipping + no mid-phrase
 pause + no clipped last word. Then a duration sanity check.
-TTS text spells numbers (two hundred and four) and uses Kag-gull for Kaggle.
+TTS text spells numbers (two hundred and four). Kaggle is spoken as Kaggle.
 Chosen seed recorded in seeds.tsv.
 Never slow or speed with atempo.
 
@@ -41,7 +43,7 @@ Mix (ffmpeg, same chain for TTS and docs/demo/vo/anoop/ overrides):
 
 Music: original soft piano-like bed (docs/demo/vo/chatterbox/music.wav),
 no lyrics, generated for this tape (no third-party sample).
-Ducked to about -22 dB under speech; out on b01 (mum open);
+Ducked to about -22 dB under speech; out on b01 (mom open);
 back from b11 (resolution).
 
 Anoop override: if docs/demo/vo/anoop/<clip>.wav exists, it replaces the

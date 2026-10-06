@@ -34,9 +34,17 @@ def collect() -> list[tuple[str, str]]:
         blobs.append((str(STORY), STORY.read_text()))
         data = json.loads(STORY.read_text())
         blobs.append(("story.json values", json.dumps(data, ensure_ascii=True)))
-    settings = ROOT / "docs/demo/vo/chatterbox/SETTINGS.txt"
-    if settings.is_file():
-        blobs.append((str(settings), settings.read_text()))
+    for rel in (
+        "docs/demo/vo/edge/SETTINGS.txt",
+        "docs/demo/vo/chatterbox/SETTINGS.txt",
+        "scripts/edge_vo.py",
+        "scripts/chatterbox_vo.py",
+        "scripts/generate_amazon_demo_vo_edge.sh",
+        "scripts/generate_amazon_demo_vo_chatterbox.sh",
+    ):
+        p = ROOT / rel
+        if p.is_file():
+            blobs.append((str(p), p.read_text()))
     return blobs
 
 
@@ -73,6 +81,12 @@ def main() -> int:
             bad.append(f"live video claim in {name}")
         if name.endswith("demo_overlays.html") and "placeholder" in text.lower():
             bad.append(f"placeholder on screen in {name}")
+        banned_locale = "en" + "-" + "IN"
+        banned_label = "M" + "um"
+        if banned_locale in text:
+            bad.append(f"Indian-locale stock voice tag in {name}")
+        if re.search(rf"\b{banned_label}\b", text):
+            bad.append(f"banned household label in {name}")
     if bad:
         print("COPY FAIL")
         for b in bad:

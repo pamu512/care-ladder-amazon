@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -103,7 +104,7 @@ def main() -> int:
     conv._refresh_apl(12)
     me_apl = apl_notify_card(
         thumbnail="last-frame-placeholder",
-        household_label="Mum",
+        household_label="Mom",
         time_since_cue_sec=12,
         cue_text="camera cue",
         countdown_sec=180,
@@ -195,7 +196,13 @@ def main() -> int:
         return text or "just now"
 
     story = {
-        "household": "Mum",
+        "household": "Mom",
+        "timezones": {
+            "caption": "One family. Three time zones.",
+            "india": T0.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%H:%M"),
+            "hong_kong": T0.astimezone(ZoneInfo("Asia/Hong_Kong")).strftime("%H:%M"),
+            "eu": T0.astimezone(ZoneInfo("Europe/Berlin")).strftime("%H:%M"),
+        },
         "roster": [
             {
                 "name": e.name,
@@ -238,7 +245,7 @@ def main() -> int:
             "by": "Me",
             "raw": defer_event.detail.get("raw"),
         },
-        "sister_unanswered": "Sister did not answer. Mum's home sent no reply.",
+        "sister_unanswered": "Sister did not answer. Mom's home sent no reply.",
         "direction_actions": direction,
         "direction_labels": [
             "try someone else",

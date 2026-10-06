@@ -3,7 +3,7 @@
 # VO dir and output path are env vars so a later Cartesia swap is
 # re-time + re-render, not a remux of locked audio.
 #
-#   VO=docs/demo/vo/chatterbox OUT=docs/demo/care-ladder-amazon-demo.mp4 \
+#   VO=docs/demo/vo/edge OUT=docs/demo/care-ladder-amazon-demo.mp4 \
 #     CARE_LADDER_ALLOW_INSECURE_LOCAL=1 ./scripts/render_amazon_demo.sh
 set -euo pipefail
 
@@ -16,7 +16,7 @@ BASE="http://${HOST}:${PORT}"
 export BASE
 export CARE_LADDER_ALLOW_INSECURE_LOCAL="${CARE_LADDER_ALLOW_INSECURE_LOCAL:-1}"
 export FRAMES="${FRAMES:-$ROOT/docs/demo/frames}"
-export VO="${VO:-$ROOT/docs/demo/vo/chatterbox}"
+export VO="${VO:-$ROOT/docs/demo/vo/edge}"
 OUT="${OUT:-$ROOT/docs/demo/care-ladder-amazon-demo.mp4}"
 CONTACT="${CONTACT:-$ROOT/docs/demo/care-ladder-amazon-demo-contact-sheet.png}"
 
@@ -71,7 +71,7 @@ work.mkdir(parents=True, exist_ok=True)
 
 BEATS = [
     ("b01", ["b01.wav"], ["b01_map.png"]),
-    ("b02", ["b02.wav"], ["b02_battery.png", "b02_call.png", "b02_camera.png"]),
+    ("b02", ["b02.wav"], ["b02_missed.png", "b02_battery.png", "b02_call.png", "b02_camera.png"]),
     ("b03", ["b03.wav"], ["b03_title.png"]),
     ("b04", ["b04.wav"], ["b04_ladder.png"]),
     ("b05", ["b05.wav"], ["b05_cue.png"]),
@@ -88,7 +88,7 @@ BEATS = [
 ]
 
 # Music source is loudnormed ~-24 LUFS. Linear gains duck it ~22 dB
-# under speech, out on the mum open, back on the resolution.
+# under speech, out on the mom open, back on the resolution.
 MUSIC_GAIN = {
     "b01": 0.0,
     "b02": 0.22,
@@ -106,10 +106,11 @@ MUSIC_GAIN = {
     "b14": 0.30,
     "b15": 0.32,
 }
-BEAT_XFADE = 0.40
+BEAT_XFADE = 0.36
 # Solid hold after each beat, longer than the xfade so leftover text
 # cannot sit in the overlap window (frame rounding can eat ~0.15s).
-BEAT_CLEAR = 0.62
+# Opening VO is longer; keep the clear short enough to stay under 3:00.
+BEAT_CLEAR = 0.48
 ROOM_MIX = 0.18
 
 
@@ -147,7 +148,7 @@ def concat_audio(wavs: list[Path], dest: Path, beat: str, room: Path) -> None:
         idx += 1
         n_lab += 1
         if i < len(wavs) - 1:
-            g = gap(f"{beat}-{i}", 0.20, 0.35)
+            g = gap(f"{beat}-{i}", 0.30, 0.45)
             inputs += ["-stream_loop", "-1", "-t", f"{g:.3f}", "-i", str(room)]
             filt.append(
                 f"[{idx}:a]aformat=sample_fmts=fltp:sample_rates=44100:channel_layouts=mono[g{i}]"
@@ -173,14 +174,22 @@ def load_sent_durs(path: Path) -> dict[str, list[float]]:
 def still_lens(beat: str, d: float, n: int, sent: dict[str, list[float]]) -> list[float]:
     if n <= 1:
         return [d]
-    if beat == "b02" and "b02" in sent and sent["b02"]:
-        raw = sum(sent["b02"]) or 1.0
-        phone = max(0.8, d * (sent["b02"][0] / raw))
-        phone = min(phone, d - 0.5)
-        batt = max(0.45, phone * 0.58)
-        call = max(0.35, phone - batt)
-        cam = max(0.4, d - batt - call)
-        return [batt, call, cam][:n]
+    if beat == "b02" and n >= 4 and "b02" in sent and sent["b02"]:
+        # missed camera, dead phone, Neighbor ringing, camera off
+        sents = sent["b02"]
+        raw = sum(sents) or 1.0
+        scale = d / raw
+        if len(sents) >= 4:
+            lens = [max(0.35, sents[i] * scale) for i in range(4)]
+            drift = d - sum(lens)
+            lens[-1] = max(0.35, lens[-1] + drift)
+            return lens[:n]
+        missed = max(0.45, sents[0] * scale)
+        mid = (sents[1] * scale) if len(sents) > 1 else max(0.8, (d - missed) * 0.55)
+        batt = max(0.40, mid * 0.52)
+        call = max(0.35, mid - batt)
+        cam = max(0.40, d - missed - batt - call)
+        return [missed, batt, call, cam][:n]
     share = d / n
     lens = [share] * (n - 1)
     lens.append(max(0.2, d - share * (n - 1)))

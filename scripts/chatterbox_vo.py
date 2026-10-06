@@ -33,7 +33,7 @@ TIMINGS = VO / "timings.tsv"
 SR = 24000
 
 EMOTIONAL = {
-    "And my mum said no to a caretaker.",
+    "So when something happens to my mom, we only find out if she tells us.",
     "Care Ladder is for families who live far from someone who lives alone.",
 }
 
@@ -78,8 +78,8 @@ VOICE = {
 # not silence (V4: reference length matters most).
 REF_PROMPTS = {
     "narrator_ref.wav": (
-        "en-IN-PrabhatNeural",
-        "-12%",
+        "en-US-BrianMultilingualNeural",
+        "-5%",
         "Hey, sit for a minute. I was just thinking about last Sunday, "
         "when we made tea and talked about nothing in particular. "
         "The rain had just stopped, and the street was quiet. "
@@ -100,8 +100,8 @@ REF_PROMPTS = {
         "stay on until we know that you are fine.",
     ),
     "neighbor_ref.wav": (
-        "en-IN-NeerjaNeural",
-        "-10%",
+        "en-US-EmmaMultilingualNeural",
+        "-8%",
         "Yes, I am nearby. I can walk over in a few minutes. Just tell me "
         "which house, and I will go now. It is no trouble at all. I will knock, "
         "see that she is fine, and then I will call you back. "
@@ -787,7 +787,7 @@ def load_whisper():
     try:
         import whisper
     except ImportError:
-        print("warning: openai-whisper missing; take pick falls back to f0 only", file=sys.stderr)
+        print("warning: openai-whisper missing; take pick uses f0 only", file=sys.stderr)
         return None
     print("loading whisper tiny.en")
     return whisper.load_model("tiny.en", device="cpu")
@@ -841,9 +841,18 @@ def selfcheck() -> int:
     bits = split_sentences("The cue, the time, how long ago, any missed check-ins.")
     assert bits[0] == "The cue," and bits[1] == "the time,"
     assert 0.20 <= gap_after("b03", 0, "x", 2) <= 0.35
+    src = Path(__file__).read_text()
+    banned_locale = "en" + "-" + "IN"
+    banned_label = "M" + "um"
+    if banned_locale in src:
+        raise AssertionError("Indian-locale stock voice tag in chatterbox tooling")
+    if re.search(rf"\b{banned_label}\b", src):
+        raise AssertionError("banned household label in chatterbox tooling")
     for _clip, _sp, text in read_lines():
         if re.search(r"\d", text):
             raise AssertionError(f"digit in TTS line: {text}")
+        if re.search(rf"\b{banned_label}\b", text):
+            raise AssertionError(f"banned household label in TTS line: {text}")
     print("SELFCHECK OK")
     return 0
 

@@ -2,27 +2,30 @@
 
 Shipped artifact: [`docs/demo/care-ladder-amazon-demo.mp4`](care-ladder-amazon-demo.mp4)
 
-This cut is the 15-beat family-ladder script with Chatterbox VO (Cartesia
-account was out of credits). `docs/demo/care-ladder-amazon-demo.mp4` is the
-ship path. Intermediate frames stay gitignored; committed VO lives in
-[`docs/demo/vo/chatterbox/`](vo/chatterbox/).
+This cut is the 15-beat family-ladder script with US English edge-tts VO.
+`docs/demo/care-ladder-amazon-demo.mp4` is the ship path. Intermediate frames
+stay gitignored; committed VO lives in [`docs/demo/vo/edge/`](vo/edge/).
 
 ## Voice
 
-- Chatterbox (intended voice): `./scripts/generate_amazon_demo_vo_chatterbox.sh`
+- Edge-tts (ship voice): `./scripts/generate_amazon_demo_vo_edge.sh`
+  - Narrator `en-US-BrianMultilingualNeural` at about -5%
+  - Alexa `en-US-AvaNeural` (small-speaker EQ)
+  - Neighbor `en-US-EmmaMultilingualNeural` (calm)
   - `LINE=b03` regenerates one clip
   - `docs/demo/vo/anoop/<clip>.wav` overrides narrator TTS through the same mix
-  - Settings: [`vo/chatterbox/SETTINGS.txt`](vo/chatterbox/SETTINGS.txt)
+  - Settings: [`vo/edge/SETTINGS.txt`](vo/edge/SETTINGS.txt)
 - Cartesia (later swap): `CARTESIA_API_KEY=... ./scripts/generate_amazon_demo_vo.sh`
   - Refuses to invent audio without the key
   - Skips wavs that already exist
   - Voices: narrator Ricardo, Alexa Camille, neighbor Connie
   - TTS expansions only: "Alexa Plus", "M C P"
+- Chatterbox (not the ship voice): `./scripts/generate_amazon_demo_vo_chatterbox.sh`
 
 Then remux (VO dir and output are env vars so a Cartesia swap is re-time + re-render):
 
 ```bash
-VO=docs/demo/vo/chatterbox \
+VO=docs/demo/vo/edge \
 OUT=docs/demo/care-ladder-amazon-demo.mp4 \
 CARE_LADDER_ALLOW_INSECURE_LOCAL=1 \
   ./scripts/render_amazon_demo.sh

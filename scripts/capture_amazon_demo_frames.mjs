@@ -113,6 +113,7 @@ async function main() {
 
   const scenes = [
     ["map", "b01_map"],
+    ["camera_missed", "b02_missed"],
     ["phone_dead", "b02_battery"],
     ["phone_call", "b02_call"],
     ["camera_off", "b02_camera"],
