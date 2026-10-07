@@ -53,3 +53,11 @@ python -m care_ladder.vision.fall_train
 ```
 
 `configs/fall_train.yaml` caps the fit at 400 samples and 25 epochs so a real run stays short.
+
+## Canonical artifact
+
+`models/fall_classifier.npz` is the only weight file. Local fallback, SageMaker `model.tar.gz`, and the held-out table all use that file. There is no ONNX conversion. The CLI fits the train split, saves the npz, reloads it, and scores the holdout so the metrics describe the bytes on disk.
+
+Cloud calls do not upload the photo. `privacy_features` blurs the frame, or uses a silhouette when blur leaves the 32x32 vector unchanged, then sends the vector. See `infra/sagemaker/README.md` and `docs/fall-cv-metrics.md`.
+
+SageMaker deploy is off unless `CARE_LADDER_SAGEMAKER_DEPLOY=1`. After a demo, delete the endpoint with `python -m care_ladder.vision.sagemaker_cue --delete` and unset `CARE_LADDER_SAGEMAKER_ENDPOINT`. Serverless mode has no idle instance; the endpoint and the S3 tarball still need that tear-down.

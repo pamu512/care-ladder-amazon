@@ -4,6 +4,8 @@
 
 **Status:** LIVE (opencv stack). Deployed on AWS (account 367597235216, us-east-1): ECS/Fargate service `care-ladder-demo` behind an internet-facing ALB (`care-ladder-demo-2017970097.us-east-1.elb.amazonaws.com`) with CloudFront HTTPS in front (`https://d2u7pls4da2poz.cloudfront.net`). Local FastAPI (`./scripts/run_demo.sh` → `care_ladder.api.app:app`) remains the fallback judge demo.
 
+Phase A in this repo is not deployed by CI. SageMaker cue scoring is behind `CARE_LADDER_SAGEMAKER_ENDPOINT`, with `models/fall_classifier.npz` as the fallback ([`sagemaker/README.md`](sagemaker/README.md)). AgentCore Gateway is an AWS front door for the same `/mcp` tools ([`agentcore-gateway.md`](agentcore-gateway.md)). Neither replaces the Alexa+ path. The shared host above still 404s `/mcp` (see `docs/friction-log.md`). Do not point the gateway at it until a care-ladder task serves that route.
+
 Provisioning commands used (reproducible): see `scripts/infra.sh` (VPC, ECR, ECS cluster/service, ALB, CloudFront, DynamoDB table, task role).
 
 The architecture matches the design spec and the separately submitted OpenCV/AWS compute grant proposal: **S3 (privacy-filtered clips) → ECS/Fargate (OpenCV + FastAPI) → EventBridge cue bus → orchestrator audit trail**.

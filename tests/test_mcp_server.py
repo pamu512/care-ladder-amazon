@@ -7,22 +7,9 @@ from fastapi.testclient import TestClient
 
 from care_ladder.api.app import create_app
 from care_ladder.audit.store import AuditStore
+from care_ladder.mcp_server.server import TOOL_NAMES
 
-EXPECTED_TOOLS = {
-    "start_or_resume_incident",
-    "check_in_prompt",
-    "advance_rung",
-    "resolve_incident",
-    "get_incident_status",
-    "notify_caretaker",
-    "request_call",
-    "caregiver_ack",
-    "caregiver_outcome",
-    "defer_escalation",
-    "tick_care_timers",
-    "how_is_household",
-    "confirm_schedule_pin",
-}
+EXPECTED_TOOLS = set(TOOL_NAMES)
 
 
 def _mcp_post(client: TestClient, body: dict, session_id: str | None = None):

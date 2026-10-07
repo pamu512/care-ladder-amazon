@@ -80,6 +80,19 @@ def mcp_allowed_hosts() -> list[str]:
     return hosts
 
 
+def mcp_host_allowed(host: str | None) -> bool:
+    """Host header check matching the MCP SDK DNS-rebinding rules."""
+    if not host:
+        return False
+    allowed = mcp_allowed_hosts()
+    if host in allowed:
+        return True
+    for item in allowed:
+        if item.endswith(":*") and host.startswith(f"{item[:-2]}:"):
+            return True
+    return False
+
+
 def _host_has_port(host: str) -> bool:
     if host.endswith(":*"):
         return True
