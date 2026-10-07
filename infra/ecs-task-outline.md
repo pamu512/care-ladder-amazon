@@ -39,7 +39,8 @@ Suggested image URI after push (placeholder — replace with your account/region
 | --- | --- | --- |
 | `CARE_LADDER_ENV` | `demo` | Label logs / metrics |
 | `CARE_LADDER_API_TOKEN` | *(Secrets Manager)* | Bearer required for `/mcp` and mutating routes. Do not leave unset on a public task. |
-| `CARE_LADDER_MCP_HOSTS` | ALB / CloudFront hostname | Extra MCP `Host` values (DNS-rebinding allowlist) |
+| `CARE_LADDER_MCP_HOSTS` | ALB / CloudFront / Gateway target hostname | Extra MCP `Host` values (DNS-rebinding allowlist). Required when AgentCore calls this task. |
+| `CARE_LADDER_SAGEMAKER_ENDPOINT` | `care-ladder-cue` | Optional. Unset uses local `models/fall_classifier.npz`. |
 | `CLIP_BUCKET` | `care-ladder-demo` | S3 bucket for **blurred/silhouette** clips only |
 | `EVENT_BUS_NAME` | `care-ladder` | EventBridge bus for cue events |
 | `AWS_REGION` | `us-east-1` | SDK default (task role, not static keys) |

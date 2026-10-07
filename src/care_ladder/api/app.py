@@ -25,6 +25,7 @@ from care_ladder.security import (
     bearer_token,
     configured_token,
     mcp_allowed_hosts,
+    mcp_host_allowed,
     redact_phones,
     validate_camera_source,
 )
@@ -520,6 +521,15 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
 
     @application.middleware("http")
     async def _require_api_token(request: Request, call_next):
+        normalized = request.url.path.rstrip("/") or "/"
+        # /mcp -> /mcp/ is a 307 whose Location copies Host. A foreign Host then
+        # changes origin and clients drop Authorization, so the follow-up is 401.
+        if normalized == "/mcp" or normalized.startswith("/mcp/"):
+            # Any Host value counts. A second Host can be the rebinding target
+            # while the first is an allowed name.
+            host_values = request.headers.getlist("host")
+            if not host_values or any(not mcp_host_allowed(item) for item in host_values):
+                return JSONResponse({"detail": "Invalid Host header"}, status_code=421)
         if not _is_gated_path(request.method, request.url.path):
             return await call_next(request)
         if not auth_required():

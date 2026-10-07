@@ -579,9 +579,10 @@ Named so the Ring / Bee / Alexa+ / Fire TV teams are not left guessing.
 
 | Tool | Evidence we skipped it |
 | --- | --- |
-| **Ring** | README: "No Bee / Ring / Bedrock / AgentCore." PRD lock: "Ring: Out for this filing." |
+| **Ring** | README origins: "No Bee / Ring." PRD lock: "Ring: Out for this filing." |
 | **Bee** | Same README line. PRD: "Bee: Out for this hack (Apple Watch alone is not Bee live data)." |
-| **Amazon Bedrock / AgentCore** | README AWS Builder mini: "Not filed. No Bedrock / AgentCore in-tree." Plan Q3: skip unless already working. |
+| **Amazon Bedrock foundation models** | Not used. No Bedrock model id in this repo. |
+| **AgentCore Gateway** | In-repo config and local `/mcp` smoke (`infra/agentcore-gateway.md`). Live `CreateGateway` stays off unless `CARE_LADDER_AGENTCORE_DEPLOY=1`. |
 | **Classic Alexa Skills Kit (ASK) skill** | PRD: "Classic ASK-only skill: Not the Stage 1 gate." No `skill.json` / interaction model in tree. |
 | **Alexa+ Category SDK / MCP Toolkit / CLI / Web Simulator** | PRD non-goals: "unavailable to participants." |
 | **Amazon Fire TV / Web App Tester official simulator** | Friction log 2026-09-29: not in that environment. Chromium 1280x720 fallback. |

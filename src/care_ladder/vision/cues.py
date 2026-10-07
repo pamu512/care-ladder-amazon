@@ -84,6 +84,8 @@ class CueDetector:
         self.fall_classifier = fall_classifier
         self.fall_score_threshold = float(fall_score_threshold)
         self._trained_fall_since: float | None = None
+        self.last_fall_error: str | None = None
+        self.last_fall_score: float | None = None
 
     @classmethod
     def from_plan(
@@ -121,7 +123,7 @@ class CueDetector:
                 timeout = float(
                     effective_no_movement_timeout_sec(plan, profile)
                 )
-        from care_ladder.vision.fall_train import load_trained_classifier
+        from care_ladder.vision.sagemaker_cue import resolve_fall_classifier
 
         det = cls(
             no_movement_timeout_sec=timeout,
@@ -129,7 +131,7 @@ class CueDetector:
             enable_no_movement=bool(plan.triggers.no_movement.enabled),
             enable_no_visibility=bool(plan.triggers.no_visibility.enabled),
             enable_distress_heuristic=bool(plan.triggers.distress_heuristic.enabled),
-            fall_classifier=load_trained_classifier(),
+            fall_classifier=resolve_fall_classifier(),
         )
         return det
 
@@ -256,31 +258,56 @@ class CueDetector:
             )
             try:
                 score = float(self.fall_classifier.predict_proba(frame, box))
-            except Exception:
-                score = 0.0
-            self.last_fall_score = score
-            if score >= self.fall_score_threshold:
-                if self._trained_fall_since is None:
-                    self._trained_fall_since = t
-                if (t - self._trained_fall_since) >= self.distress_sustain_sec:
-                    self._trained_fall_since = None
-                    detail = {
-                        "non_clinical": True,
-                        "note": "trained fall-frame classifier; not a medical diagnosis",
-                        "source": "trained_fall_classifier",
-                        "score": round(score, 4),
-                    }
-                    if getattr(self, "last_tracking", None):
-                        tr = self.last_tracking
-                        detail["person_count"] = tr["person_count"]
-                        detail["tracks"] = tr["tracks"]
-                    return CueEvent(
-                        kind="distress_heuristic",
-                        confidence=min(0.85, 0.5 + 0.4 * score),
-                        detail=detail,
-                    )
-            else:
+            except Exception as exc:
+                # A failed score is not 0. Thresholds at or below 0 would
+                # otherwise turn an outage into a distress cue.
+                self.last_fall_error = f"{type(exc).__name__}: {exc}"
+                self.last_fall_score = None
                 self._trained_fall_since = None
+            else:
+                self.last_fall_error = None
+                self.last_fall_score = score
+                if score >= self.fall_score_threshold:
+                    if self._trained_fall_since is None:
+                        self._trained_fall_since = t
+                    if (t - self._trained_fall_since) >= self.distress_sustain_sec:
+                        self._trained_fall_since = None
+                        from care_ladder.vision.sagemaker_cue import SageMakerCueScorer
+
+                        sagemaker = isinstance(self.fall_classifier, SageMakerCueScorer)
+                        detail = {
+                            "non_clinical": True,
+                            "note": (
+                                "SageMaker fall-frame score on a blurred or silhouette crop; not a medical diagnosis"
+                                if sagemaker
+                                else "trained fall-frame classifier; not a medical diagnosis"
+                            ),
+                            "source": (
+                                "sagemaker_fall_classifier"
+                                if sagemaker
+                                else "trained_fall_classifier"
+                            ),
+                            "score": round(score, 4),
+                        }
+                        if sagemaker:
+                            detail["privacy"] = getattr(
+                                self.fall_classifier, "last_privacy", None
+                            )
+                            detail["artifact"] = "fall_classifier.npz"
+                            detail["endpoint"] = getattr(
+                                self.fall_classifier, "endpoint_name", None
+                            )
+                        if getattr(self, "last_tracking", None):
+                            tr = self.last_tracking
+                            detail["person_count"] = tr["person_count"]
+                            detail["tracks"] = tr["tracks"]
+                        return CueEvent(
+                            kind="distress_heuristic",
+                            confidence=min(0.85, 0.5 + 0.4 * score),
+                            detail=detail,
+                        )
+                else:
+                    self._trained_fall_since = None
 
         if (
             self.enable_distress_heuristic

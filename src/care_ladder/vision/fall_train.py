@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+import hashlib
 import json
 import math
 import os
@@ -189,6 +190,18 @@ class FallFrameClassifier:
         self.bias = float(bias)
         self.input_wh = (int(input_wh[0]), int(input_wh[1]))
         self.threshold = float(threshold)
+        if self.input_wh[0] < 1 or self.input_wh[1] < 1:
+            raise ValueError(f"input_wh must be positive, got {self.input_wh}")
+        expected = self.input_wh[0] * self.input_wh[1]
+        if self.weights.shape[0] != expected:
+            raise ValueError(
+                f"weights {self.weights.shape[0]} != input_wh "
+                f"{self.input_wh[0]}*{self.input_wh[1]}"
+            )
+        if not np.isfinite(self.weights).all() or not math.isfinite(self.bias):
+            raise ValueError("weights and bias must be finite")
+        if not math.isfinite(self.threshold):
+            raise ValueError("threshold must be finite")
 
     def features(
         self, frame: np.ndarray, box: tuple[float, float, float, float] | None = None
@@ -232,12 +245,16 @@ class FallFrameClassifier:
 
     @classmethod
     def load(cls, path: Path) -> FallFrameClassifier:
-        data = np.load(Path(path), allow_pickle=True)
+        with np.load(Path(path), allow_pickle=False) as data:
+            weights = np.array(data["weights"], dtype=np.float64, copy=True)
+            bias = float(data["bias"])
+            input_wh = tuple(int(v) for v in np.array(data["input_wh"], copy=True))
+            threshold = float(data["threshold"])
         return cls(
-            weights=data["weights"],
-            bias=float(data["bias"]),
-            input_wh=tuple(int(v) for v in data["input_wh"]),
-            threshold=float(data["threshold"]),
+            weights=weights,
+            bias=bias,
+            input_wh=input_wh,
+            threshold=threshold,
         )
 
 
@@ -336,49 +353,244 @@ def download_kaggle_dataset(slug: str, dest: Path) -> Path:
     return dest
 
 
-def _features_for_sample(
-    image: Path,
-    box: tuple[float, float, float, float],
+def sigmoid_score(features: np.ndarray, weights: np.ndarray, bias: float) -> float:
+    """Same clamp as FallFrameClassifier.predict_proba and the SageMaker entrypoint."""
+    z = float(np.asarray(features, dtype=np.float64) @ np.asarray(weights, dtype=np.float64) + float(bias))
+    z = min(40.0, max(-40.0, z))
+    return 1.0 / (1.0 + math.exp(-z))
+
+
+def privacy_features(
+    frame: np.ndarray,
+    box: tuple[float, float, float, float] | None,
     input_wh: tuple[int, int],
-) -> np.ndarray | None:
-    frame = cv2.imread(str(image))
-    if frame is None:
-        return None
-    tmp = FallFrameClassifier(np.zeros(input_wh[0] * input_wh[1]), 0.0, input_wh=input_wh)
-    return tmp.features(frame, box)
+) -> tuple[np.ndarray, str]:
+    """Feature vector safe to send off-box. Raw pixels are not returned.
+
+    Blur the frame first. If that leaves the 32x32 vector unchanged, use a
+    silhouette. The weights stay the ones in fall_classifier.npz.
+    """
+    from care_ladder.privacy import blur_faces, to_silhouette
+
+    wh = (int(input_wh[0]), int(input_wh[1]))
+    probe = FallFrameClassifier(np.zeros(wh[0] * wh[1]), 0.0, input_wh=wh)
+    bgr = frame if frame.ndim == 3 else cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
+    raw = probe.features(bgr, box)
+    blurred = blur_faces(bgr)
+    blurred_vec = probe.features(blurred, box)
+    if not np.array_equal(blurred, bgr) and not np.allclose(blurred_vec, raw):
+        return blurred_vec, "blur"
+    return probe.features(to_silhouette(bgr), box), "silhouette"
 
 
-def train_from_dataset(cfg: dict[str, Any], data_root: Path) -> FallFrameClassifier:
+def _split_indices(
+    y: np.ndarray, holdout_frac: float, seed: int
+) -> tuple[np.ndarray, np.ndarray]:
+    if len(y) < 8:
+        raise ValueError("need at least 8 samples for a held-out split")
+    rng = np.random.default_rng(seed)
+    idx = rng.permutation(len(y))
+    n_hold = max(1, int(round(len(y) * holdout_frac)))
+    n_hold = min(n_hold, len(y) - 2)
+    hold = idx[:n_hold].copy()
+    train = idx[n_hold:].copy()
+
+    def classes(part: np.ndarray) -> set[int]:
+        return {int(round(float(v))) for v in y[part]}
+
+    for cls in (0, 1):
+        if cls not in classes(train) and cls in classes(hold):
+            hpos = next(
+                i for i, row in enumerate(hold) if int(round(float(y[row]))) == cls
+            )
+            tpos = next(
+                i for i, row in enumerate(train) if int(round(float(y[row]))) != cls
+            )
+            hold[hpos], train[tpos] = train[tpos], hold[hpos]
+    if len(classes(train)) < 2:
+        raise ValueError("held-out split could not keep both classes in train")
+    return train, hold
+
+
+def binary_metrics(
+    y_true: np.ndarray, scores: np.ndarray, threshold: float
+) -> dict[str, float | int]:
+    pred = (np.asarray(scores) >= float(threshold)).astype(np.float64)
+    truth = np.asarray(y_true, dtype=np.float64)
+    tp = int(np.sum((pred == 1) & (truth == 1)))
+    fp = int(np.sum((pred == 1) & (truth == 0)))
+    fn = int(np.sum((pred == 0) & (truth == 1)))
+    tn = int(np.sum((pred == 0) & (truth == 0)))
+    n = int(len(truth))
+    return {
+        "n": n,
+        "accuracy": (tp + tn) / n if n else 0.0,
+        "precision": tp / (tp + fp) if (tp + fp) else 0.0,
+        "recall": tp / (tp + fn) if (tp + fn) else 0.0,
+        "tp": tp,
+        "fp": fp,
+        "fn": fn,
+        "tn": tn,
+    }
+
+
+def score_matrix(clf: FallFrameClassifier, rows: np.ndarray) -> np.ndarray:
+    return np.asarray(
+        [sigmoid_score(row, clf.weights, clf.bias) for row in rows],
+        dtype=np.float64,
+    )
+
+
+def fit_held_out(
+    X: np.ndarray,
+    y: np.ndarray,
+    *,
+    epochs: int,
+    lr: float,
+    threshold: float,
+    input_wh: tuple[int, int],
+    seed: int = 0,
+    holdout_frac: float = 0.2,
+) -> tuple[FallFrameClassifier, np.ndarray, np.ndarray]:
+    """Fit on the train split only. The saved npz is this classifier, not a second model."""
+    train_idx, hold_idx = _split_indices(y, holdout_frac, seed)
+    clf = train_logistic(
+        X[train_idx],
+        y[train_idx],
+        epochs=epochs,
+        lr=lr,
+        threshold=threshold,
+        input_wh=input_wh,
+        seed=seed,
+    )
+    return clf, train_idx, hold_idx
+
+
+def format_metrics_markdown(
+    raw: dict[str, float | int],
+    privacy: dict[str, float | int],
+    *,
+    sha256: str,
+    holdout_tags: dict[str, int],
+) -> str:
+    def row(label: str, metrics: dict[str, float | int]) -> str:
+        return (
+            f"| {label} | npz | {metrics['accuracy']:.4f} | "
+            f"{metrics['precision']:.4f} | {metrics['recall']:.4f} | {metrics['n']} |"
+        )
+
+    tags = ", ".join(f"{k}={v}" for k, v in sorted(holdout_tags.items()))
+    return "\n".join(
+        [
+            "# Held-out metrics",
+            "",
+            "Canonical artifact: `models/fall_classifier.npz` (one logistic weight vector).",
+            "SageMaker `model.tar.gz` embeds that file. There is no ONNX export.",
+            "The file is fit on the train split. The holdout rows were not used to fit it.",
+            f"sha256: `{sha256}`",
+            "",
+            "| Input | Weights | Accuracy | Precision | Recall | n |",
+            "| --- | --- | --- | --- | --- | --- |",
+            row("raw gray crop (local fallback)", raw),
+            row("blur or silhouette features (cloud payload)", privacy),
+            "",
+            f"Holdout privacy tags: {tags}.",
+            "Same weights for both rows. Cloud input is not a second model.",
+            "",
+        ]
+    )
+
+
+def collect_samples(cfg: dict[str, Any], data_root: Path) -> dict[str, Any]:
     train_cfg = cfg.get("train") or {}
     input_wh = tuple(int(v) for v in train_cfg.get("input_wh", [32, 32]))
     if len(input_wh) != 2:
         raise ValueError("train.input_wh must be [width, height]")
     max_samples = int(train_cfg.get("max_samples", 400))
     fall_ids = tuple(int(v) for v in cfg["dataset"]["fall_class_ids"])
-    X: list[np.ndarray] = []
-    y: list[float] = []
+    raw_rows: list[np.ndarray] = []
+    priv_rows: list[np.ndarray] = []
+    labels: list[float] = []
+    tags: list[str] = []
     for image, label, box in iter_yolo_samples(data_root, fall_class_ids=fall_ids):
-        feat = _features_for_sample(image, box, input_wh)
-        if feat is None:
+        frame = cv2.imread(str(image))
+        if frame is None:
             continue
-        X.append(feat)
-        y.append(float(label))
-        if len(X) >= max_samples:
+        probe = FallFrameClassifier(
+            np.zeros(input_wh[0] * input_wh[1]), 0.0, input_wh=input_wh
+        )
+        raw_rows.append(probe.features(frame, box))
+        priv, tag = privacy_features(frame, box, input_wh)
+        priv_rows.append(priv)
+        labels.append(float(label))
+        tags.append(tag)
+        if len(raw_rows) >= max_samples:
             break
-    if not X:
+    if not raw_rows:
         raise FileNotFoundError(
             f"no labeled YOLO samples under {data_root}; download the Kaggle set first"
         )
-    if len(set(y)) < 2:
+    y = np.asarray(labels, dtype=np.float64)
+    if len(set(int(round(float(v))) for v in y)) < 2:
         raise ValueError("training set has only one class; refusing to fit")
+    return {
+        "X": np.stack(raw_rows),
+        "X_priv": np.stack(priv_rows),
+        "y": y,
+        "input_wh": input_wh,
+        "tags": tags,
+    }
+
+
+def train_from_dataset(cfg: dict[str, Any], data_root: Path) -> FallFrameClassifier:
+    """Fit on every collected sample. The CLI saves the held-out train split instead."""
+    bag = collect_samples(cfg, data_root)
+    train_cfg = cfg.get("train") or {}
     return train_logistic(
-        np.stack(X),
-        np.asarray(y),
+        bag["X"],
+        bag["y"],
         epochs=int(train_cfg.get("epochs", 25)),
         lr=float(train_cfg.get("lr", 0.3)),
         threshold=float(train_cfg.get("threshold", 0.65)),
-        input_wh=input_wh,
+        input_wh=bag["input_wh"],
     )
+
+
+def _print_held_out(
+    loaded: FallFrameClassifier,
+    bag: dict[str, Any],
+    hold_idx: np.ndarray,
+    weights: Path,
+) -> None:
+    raw = binary_metrics(
+        bag["y"][hold_idx],
+        score_matrix(loaded, bag["X"][hold_idx]),
+        loaded.threshold,
+    )
+    priv = binary_metrics(
+        bag["y"][hold_idx],
+        score_matrix(loaded, bag["X_priv"][hold_idx]),
+        loaded.threshold,
+    )
+    tags: dict[str, int] = {}
+    for i in hold_idx:
+        tag = bag["tags"][int(i)]
+        tags[tag] = tags.get(tag, 0) + 1
+    digest = hashlib.sha256(weights.read_bytes()).hexdigest()
+    print("artifact format: npz (canonical; SageMaker tarball embeds this file; no ONNX)")
+    print(f"sha256: {digest}")
+    print(
+        "held-out raw-crop: "
+        f"n={raw['n']} accuracy={raw['accuracy']:.4f} "
+        f"precision={raw['precision']:.4f} recall={raw['recall']:.4f}"
+    )
+    print(
+        "held-out privacy-features: "
+        f"n={priv['n']} accuracy={priv['accuracy']:.4f} "
+        f"precision={priv['precision']:.4f} recall={priv['recall']:.4f}"
+    )
+    print("holdout privacy tags: " + ", ".join(f"{k}={v}" for k, v in sorted(tags.items())))
+    print(format_metrics_markdown(raw, priv, sha256=digest, holdout_tags=tags))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -412,15 +624,43 @@ def main(argv: list[str] | None = None) -> int:
     if args.download_only:
         print(f"downloaded: {dest}")
         return 0
+    train_cfg = cfg.get("train") or {}
     try:
-        clf = train_from_dataset(cfg, dest)
+        bag = collect_samples(cfg, dest)
+        if len(bag["y"]) < 8:
+            clf = train_logistic(
+                bag["X"],
+                bag["y"],
+                epochs=int(train_cfg.get("epochs", 25)),
+                lr=float(train_cfg.get("lr", 0.3)),
+                threshold=float(train_cfg.get("threshold", 0.65)),
+                input_wh=bag["input_wh"],
+            )
+            hold_idx = None
+        else:
+            clf, _train_idx, hold_idx = fit_held_out(
+                bag["X"],
+                bag["y"],
+                epochs=int(train_cfg.get("epochs", 25)),
+                lr=float(train_cfg.get("lr", 0.3)),
+                threshold=float(train_cfg.get("threshold", 0.65)),
+                input_wh=bag["input_wh"],
+            )
     except (FileNotFoundError, ValueError) as exc:
         print(f"BLOCKER: {exc}", file=sys.stderr)
         return 3
     weights = repo_root() / str(cfg["weights"])
     clf.save(weights, slug=slug)
+    loaded = FallFrameClassifier.load(weights)
+    if not np.allclose(loaded.weights, clf.weights) or abs(loaded.bias - clf.bias) > 1e-12:
+        print("BLOCKER: saved npz does not match the fitted weights", file=sys.stderr)
+        return 3
     print(f"weights: {weights} (gitignored)")
     print(f"load: CueDetector.from_plan attaches {weights.name} when the file exists")
+    if hold_idx is None:
+        print("held-out: skipped (fewer than 8 samples). Metrics were not invented.")
+        return 0
+    _print_held_out(loaded, bag, hold_idx, weights)
     return 0
 
 

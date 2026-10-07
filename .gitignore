@@ -1,6 +1,7 @@
 .env
 models/*.onnx
 models/*.npz
+models/sagemaker/
 data/kaggle/
 .DS_Store
 .venv/

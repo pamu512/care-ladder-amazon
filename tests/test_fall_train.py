@@ -20,9 +20,13 @@ from care_ladder.vision.fall_train import (
     default_weights_path,
     download_kaggle_dataset,
     iter_yolo_samples,
+    binary_metrics,
+    fit_held_out,
     load_train_config,
     load_trained_classifier,
     parse_yolo_line,
+    privacy_features,
+    sigmoid_score,
     train_logistic,
 )
 
@@ -144,6 +148,39 @@ def test_train_on_synthetic_separates_fall_from_upright():
     assert clf.predict_proba(stand, _blob_box(stand)) < 0.4
 
 
+def test_trained_score_must_sustain_before_cue():
+    clf = _synthetic_classifier()
+    det = CueDetector(
+        no_movement_timeout_sec=999,
+        zone=[(0, 0), (64, 0), (64, 64), (0, 64)],
+        enable_no_movement=False,
+        enable_no_visibility=False,
+        enable_distress_heuristic=True,
+        distress_sustain_sec=1.0,
+        distress_aspect_min=99.0,
+        fall_classifier=clf,
+        fall_score_threshold=0.55,
+    )
+    assert det.observe(_horiz(7), t=0.0) is None
+    cue = det.observe(_horiz(7), t=1.0)
+    assert cue is not None
+    assert cue.detail["source"] == "trained_fall_classifier"
+
+
+def test_load_rejects_nonfinite_weights(tmp_path: Path):
+    path = tmp_path / "fall_classifier.npz"
+    np.savez(
+        path,
+        weights=np.full(1024, np.nan),
+        bias=np.asarray(0.0),
+        input_wh=np.asarray((32, 32)),
+        threshold=np.asarray(0.65),
+        slug=np.asarray("elwalyahmad/fall-detection"),
+    )
+    with pytest.raises(ValueError, match="finite"):
+        FallFrameClassifier.load(path)
+
+
 def test_classifier_save_load_roundtrip(tmp_path: Path):
     clf = _synthetic_classifier()
     path = tmp_path / "fall_classifier.npz"
@@ -154,6 +191,7 @@ def test_classifier_save_load_roundtrip(tmp_path: Path):
 
 
 def test_from_plan_attaches_weights_when_present(tmp_path: Path, monkeypatch):
+    monkeypatch.delenv("CARE_LADDER_SAGEMAKER_ENDPOINT", raising=False)
     path = tmp_path / "fall_classifier.npz"
     _synthetic_classifier().save(path, slug="elwalyahmad/fall-detection")
     monkeypatch.setattr(
@@ -166,6 +204,7 @@ def test_from_plan_attaches_weights_when_present(tmp_path: Path, monkeypatch):
 
 
 def test_from_plan_skips_missing_weights(monkeypatch, tmp_path: Path):
+    monkeypatch.delenv("CARE_LADDER_SAGEMAKER_ENDPOINT", raising=False)
     monkeypatch.setattr(
         "care_ladder.vision.fall_train.default_weights_path",
         lambda: tmp_path / "nope.npz",
@@ -211,3 +250,43 @@ def test_config_yaml_is_loadable():
     data = yaml.safe_load(CONFIG.read_text())
     assert data["weights"].endswith("fall_classifier.npz")
     assert data["dataset"]["fall_class_ids"] == [0]
+
+
+def test_sigmoid_matches_predict_proba():
+    clf = _synthetic_classifier()
+    frame = _horiz(3)
+    vec = clf.features(frame, _blob_box(frame))
+    assert sigmoid_score(vec, clf.weights, clf.bias) == pytest.approx(
+        clf.predict_proba(frame, _blob_box(frame))
+    )
+
+
+def test_held_out_split_scores_the_train_split_only():
+    rng = np.random.default_rng(0)
+    dim = 32 * 32
+    low = np.clip(rng.normal(0.15, 0.02, size=(12, dim)), 0.0, 1.0)
+    high = np.clip(rng.normal(0.85, 0.02, size=(12, dim)), 0.0, 1.0)
+    matrix = np.vstack([low, high])
+    labels = np.array([0.0] * 12 + [1.0] * 12)
+    clf, train_idx, hold_idx = fit_held_out(
+        matrix, labels, epochs=30, lr=0.8, threshold=0.5, input_wh=(32, 32)
+    )
+    assert len(train_idx) + len(hold_idx) == len(labels)
+    assert set(np.asarray(train_idx).tolist()).isdisjoint(set(np.asarray(hold_idx).tolist()))
+    metrics = binary_metrics(labels[hold_idx], [sigmoid_score(row, clf.weights, clf.bias) for row in matrix[hold_idx]], 0.5)
+    assert metrics["n"] == len(hold_idx)
+    assert metrics["accuracy"] >= 0.75
+
+
+def test_privacy_features_are_not_the_raw_crop():
+    frame = np.zeros((80, 80, 3), dtype=np.uint8)
+    frame[:, :] = (18, 18, 18)
+    frame[15:65, 30:50] = (20, 20, 220)
+    box = (30.0, 15.0, 50.0, 65.0)
+    vec, tag = privacy_features(frame, box, (32, 32))
+    raw = FallFrameClassifier(np.zeros(32 * 32), 0.0).features(frame, box)
+    assert tag in {"blur", "silhouette"}
+    assert vec.shape == (1024,)
+    assert not np.allclose(vec, raw)
+    if tag == "silhouette":
+        assert set(np.unique(np.round(vec, 5)).tolist()).issubset({0.0, 1.0})

@@ -47,6 +47,23 @@ _AMAZON_PLAN = _REPO_ROOT / "configs" / "amazon_demo_home.yaml"
 
 mcp: MCPServer = MCPServer("Care Ladder")
 
+# Live tools/list must match this tuple (tests/test_mcp_server.py).
+TOOL_NAMES = (
+    "start_or_resume_incident",
+    "check_in_prompt",
+    "advance_rung",
+    "resolve_incident",
+    "get_incident_status",
+    "notify_caretaker",
+    "request_call",
+    "caregiver_ack",
+    "caregiver_outcome",
+    "defer_escalation",
+    "tick_care_timers",
+    "how_is_household",
+    "confirm_schedule_pin",
+)
+
 # Session registry keyed by household+incident. Incidents are also saved
 # into the FastAPI AuditStore so Fire TV's /incidents poll sees the same
 # object the MCP tools mutate.

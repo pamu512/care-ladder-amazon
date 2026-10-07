@@ -22,8 +22,15 @@ own; silhouette-only video.
   multi-session incident state - not single-turn Q&A.
 - **Supporting: Fire TV** - Calm Care-Tech caregiver dashboard (D-pad focus,
   silhouette only, audit trail, demo console wired to the real orchestrator).
-- **AWS Builder mini: NOT filed** - no real Bedrock/AgentCore piece in-tree;
-  per rules we claim only what runs.
+- **AWS Builder mini: in repo, not live-deployed by CI.** SageMaker cue
+  endpoint is flag-gated (`CARE_LADDER_SAGEMAKER_ENDPOINT`) on the same
+  `models/fall_classifier.npz` the local fallback uses (no ONNX, no Bedrock
+  foundation model). AgentCore Gateway is configured to forward
+  `Authorization` to self-hosted `/mcp`. ECR, ECS Fargate, ALB, CloudFront,
+  DynamoDB, S3, and EventBridge are the existing shared opencv stack.
+  Live SageMaker and Gateway creates stay off until the spend flags are set.
+  Open Source mini: Yes (public MIT). Architecture gallery refresh is a
+  follow-up. No Final Submit from this draft.
 
 ## What we built (before/after)
 - **Before (pre-window, same repo):** OpenCV cue detection (person/pose ONNX

@@ -18,7 +18,7 @@ Amazon **Build, Ship, Shape** (draft — no Final Submit).
 | **Alexa+ (primary)** | Self-hosted MCP care-flow tools + in-repo simulated Alexa+ MCP client. Multi-rung, multi-turn, incident session state — not single-turn Q&A. |
 | **Fire TV (supporting)** | Calm Care-Tech caregiver surface at `/firetv/` — D-pad focus, Ambient Hearth layout, data-driven from the live ladder API. |
 | **MCP** | Spec **2025-11-25+** Streamable HTTP at `/mcp`. |
-| **AWS Builder mini** | **Not filed.** No Bedrock / AgentCore in-tree. |
+| **AWS Builder mini** | **In repo. Not deployed by CI.** SageMaker cue scoring is flag-gated (`CARE_LADDER_SAGEMAKER_ENDPOINT`) with local `models/fall_classifier.npz` fallback. AgentCore Gateway config fronts the same `/mcp` tools. Existing account stack: ECR, ECS Fargate, ALB, CloudFront, DynamoDB, S3, EventBridge (shared opencv host; this repo does not redeploy it). No Bedrock foundation model. |
 
 **MCP tools:** `start_or_resume_incident` · `check_in_prompt` · `advance_rung` · `resolve_incident` · `get_incident_status` · `notify_caretaker` · `request_call` · `caregiver_ack` · `caregiver_outcome` · `defer_escalation` · `tick_care_timers` · `how_is_household` · `confirm_schedule_pin`
 
@@ -122,7 +122,21 @@ MCP handshake + care-flow tools, Fire TV HTML/API flow, response intent, `alexa_
 
 ## Fall-frame classifier (optional)
 
-Kaggle download and training: [`docs/fall-cv-training.md`](docs/fall-cv-training.md). Weights land at `models/fall_classifier.npz` (gitignored). `CueDetector.from_plan` loads them when the file exists.
+Kaggle download and training: [`docs/fall-cv-training.md`](docs/fall-cv-training.md). Weights land at `models/fall_classifier.npz` (gitignored). That npz is the only artifact (no ONNX). `CueDetector.from_plan` loads it when the file exists and `CARE_LADDER_SAGEMAKER_ENDPOINT` is unset. When the env var is set, the same weights are meant to run on SageMaker; the client sends blurred or silhouette features, not raw frames. Held-out table: [`docs/fall-cv-metrics.md`](docs/fall-cv-metrics.md). Endpoint setup and tear-down: [`infra/sagemaker/README.md`](infra/sagemaker/README.md).
+
+## AWS Builder
+
+Alexa+ stays on self-hosted `/mcp` and `alexa_sim`. The Builder pieces are extra.
+
+| Piece | State |
+| --- | --- |
+| SageMaker cue endpoint | Code and a local package check. Live endpoint is deferred until `CARE_LADDER_SAGEMAKER_DEPLOY=1`. |
+| AgentCore Gateway | Credential provider, `Authorization` forwarded to the MCP target, hostname in `CARE_LADDER_MCP_HOSTS`. Smoke: `python scripts/agentcore_gateway_smoke.py`. Live create is deferred until `CARE_LADDER_AGENTCORE_DEPLOY=1`. See [`infra/agentcore-gateway.md`](infra/agentcore-gateway.md). |
+| ECR, ECS Fargate, ALB, CloudFront, DynamoDB, S3, EventBridge | Already on the shared opencv host. [`infra/README.md`](infra/README.md). CI here does not deploy. |
+| Bedrock foundation models | Not used. |
+| Open Source mini | Yes. Public MIT, [`LICENSE`](LICENSE). |
+
+Architecture gallery refresh is a follow-up (Grok Bot). No Final Submit from this change.
 
 ## Shared demo host (read-only from this repo)
 
@@ -132,7 +146,7 @@ Vision ONNX models and eval clips are **not** committed. If you want the optiona
 
 ## Origins
 
-Significant in-window update of OpenCV Care Ladder ([`pamu512/opencv-care-ladder`](https://github.com/pamu512/opencv-care-ladder)). Vision cues are vendored here as the trigger; Amazon work is MCP + Fire TV + rungs. The OpenCV repo stays separate until after OpenCV judging. No Bee / Ring / Bedrock / AgentCore.
+Significant in-window update of OpenCV Care Ladder ([`pamu512/opencv-care-ladder`](https://github.com/pamu512/opencv-care-ladder)). Vision cues are vendored here as the trigger; Amazon work is MCP + Fire TV + rungs. The OpenCV repo stays separate until after OpenCV judging. No Bee / Ring. No Bedrock foundation model.
 
 ## License
 
