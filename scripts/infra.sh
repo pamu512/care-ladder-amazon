@@ -88,7 +88,7 @@ echo "task def: $TASK_DEF_ARN"
 if ! aws elbv2 describe-load-balancers --profile "$PROFILE" --names care-ladder-demo >/dev/null 2>&1; then
   TG_ARN=$(aws elbv2 create-target-group --profile "$PROFILE" \
     --name care-ladder-demo --protocol HTTP --port 8000 --vpc-id "$VPC_ID" \
-    --target-type ip --health-check-path /incidents \
+    --target-type ip --health-check-path /docs \
     --query 'TargetGroups[0].TargetGroupArn' --output text)
   ALB_ARN=$(aws elbv2 create-load-balancer --profile "$PROFILE" \
     --name care-ladder-demo --scheme internet-facing --type application \
@@ -179,5 +179,5 @@ echo "eventbridge archive: bus $BUS -> /aws/events/care-ladder-cues"
 
 echo
 echo "stack ready:"
-echo "  health:   curl http://$ALB_DNS/v1/health"
-echo "  https:    https://$CF_DNS/v1/health"
+echo "  health:   curl http://$ALB_DNS/docs"
+echo "  https:    https://$CF_DNS/docs"

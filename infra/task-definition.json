@@ -13,7 +13,7 @@
   "containerDefinitions": [
     {
       "name": "care-ladder-api",
-      "image": "367597235216.dkr.ecr.us-east-1.amazonaws.com/care-ladder:demo",
+      "image": "367597235216.dkr.ecr.us-east-1.amazonaws.com/care-ladder:ab19d70",
       "essential": true,
       "portMappings": [
         {
@@ -41,6 +41,16 @@
         {
           "name": "EVENT_BUS_NAME",
           "value": "care-ladder"
+        },
+        {
+          "name": "CARE_LADDER_MCP_HOSTS",
+          "value": "d2u7pls4da2poz.cloudfront.net,care-ladder-demo-2017970097.us-east-1.elb.amazonaws.com"
+        }
+      ],
+      "secrets": [
+        {
+          "name": "CARE_LADDER_API_TOKEN",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:367597235216:secret:care-ladder/api-token-5LvOg2"
         }
       ],
       "logConfiguration": {
@@ -54,12 +64,12 @@
       "healthCheck": {
         "command": [
           "CMD-SHELL",
-          "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/incidents')\" || exit 1"
+          "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/docs')\" || exit 1"
         ],
         "interval": 30,
         "timeout": 5,
         "retries": 3,
-        "startPeriod": 20
+        "startPeriod": 30
       }
     }
   ],
