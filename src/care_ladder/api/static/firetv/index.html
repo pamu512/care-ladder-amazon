@@ -33,10 +33,10 @@
     --surface: #2E2B25;
     --surface-2: #35322A;
     --ink: #EFEAE2;
-    --ink-60: rgba(239,234,226,0.62);
-    --ink-70: rgba(239,234,226,0.74);
-    --ink-40: rgba(239,234,226,0.40);
-    --ink-25: rgba(239,234,226,0.25);
+    --ink-60: rgba(239,234,226,0.78);
+    --ink-70: rgba(239,234,226,0.90);
+    --ink-40: rgba(239,234,226,0.78);
+    --ink-25: rgba(239,234,226,0.78);
     --line: rgba(239,234,226,0.09);
     --sage: #A8B5A0;
     --sage-dim: rgba(168,181,160,0.16);
@@ -155,7 +155,7 @@
     align-items: center;
   }
   .hero { display: flex; flex-direction: column; justify-content: center; min-width: 0; }
-  .hero:focus { outline: none; }
+  .hero:focus { outline: none; box-shadow: var(--focus); }
   .hero-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: clamp(10px, 1.8vh, 18px); }
   .rung-chip { padding: 7px 16px; border-radius: 999px; font-size: 13.5px; font-weight: 600; }
   .rung-chip.ok { background: var(--sage-dim); color: var(--sage); }
@@ -226,7 +226,7 @@
     padding: 12px 24px 14px;
     display: flex; flex-direction: column; min-width: 0;
   }
-  .presence:focus { outline: none; }
+  .presence:focus { outline: none; box-shadow: var(--focus); }
   .pres-stage { position: relative; height: clamp(92px, 15vh, 150px); display: grid; place-items: center; }
   .pres-glow {
     position: absolute; width: min(250px, 92%); aspect-ratio: 1; border-radius: 50%;
@@ -296,9 +296,9 @@
   .rung.pending .rung-name, .rung.off .rung-name { color: var(--ink-40); font-weight: 500; }
   .rung-msg { margin-top: 4px; font-size: 13px; line-height: 1.3; color: var(--amber); }
   .audit { margin-top: 11px; padding-top: 10px; border-top: 1px solid var(--line); display: flex; gap: 14px; align-items: baseline; }
-  .audit-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-40); font-weight: 600; white-space: nowrap; }
+  .audit-label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-40); font-weight: 600; }
   .audit-flow, .audit-events { display: flex; flex-wrap: wrap; gap: 3px 9px; align-items: baseline; font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 12.5px; line-height: 1.65; }
-  .a-ev { white-space: nowrap; }
+  .a-ev { overflow-wrap: anywhere; }
   .a-sep { color: var(--ink-25); }
   .a-r { font-family: var(--font-mono); font-size: 12px; }
   .a-m { font-size: 12.5px; color: var(--ink-60); }
@@ -491,7 +491,7 @@
         <div class="transcript">
           <div class="t-title">Alexa+ check-in</div>
           <div id="transcriptBody">
-            <div class="t-empty" id="tEmpty">No check-in running. The last one resolved at 11:02 — the resident answered on the first attempt.</div>
+            <div class="t-empty" id="tEmpty">No check-in running.</div>
           </div>
         </div>
       </aside>
@@ -563,13 +563,13 @@
         Emergency dial is off
       </div>
       <div class="gate-body" id="gateBody">
-        Care Ladder never calls emergency services on its own. This rung stays disabled unless a human turns it on, here, behind this gate — and in this demo build it is hard-locked: holding will explain what a live build would do, but no call can ever be placed.
+        Care Ladder never calls emergency services on its own. This rung stays disabled unless a human turns it on, here, behind this gate, and in this demo build it is hard-locked: holding will explain what a live build would do, but no call can ever be placed.
       </div>
       <button class="gate-hold" id="gateHold">
         <span class="progress" aria-hidden="true"></span>
         <span class="lbl">Hold 3s to review enabling</span>
       </button>
-      <button class="gate-cancel" id="gateCancel">Close — keep it off</button>
+      <button class="gate-cancel" id="gateCancel">Close, keep it off</button>
     </div>
   </div>
 
@@ -597,9 +597,9 @@
   ];
   const CHECK_SVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
 
-  const EMPTY_NOTE = 'No check-in running. The last one resolved at 11:02 — the resident answered on the first attempt.';
+  const EMPTY_NOTE = 'No check-in running.';
   const ALLCLEAR_SUB = 'The resident settled after lunch · living room. The ladder is watching and will confirm before it ever escalates.';
-  const LOCKED_MSG = 'Hard-locked in this build — a live install would require re-enabling in care plan settings';
+  const LOCKED_MSG = 'Hard-locked in this build. A live install would require re-enabling in care plan settings';
 
   const esc = (s) => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 
@@ -686,7 +686,7 @@
     const resolved = (inc.events || []).some(e => e.tool === 'resolve');
     const last = checkins[checkins.length - 1];
     const lastRaw = last && last.detail && last.detail.reply_raw;
-    const silenceLine = (!resolved && !lastRaw) ? '<div class="t-line silence"><span class="t-who">—</span><span class="t-what">silence</span></div>' : '';
+    const silenceLine = (!resolved && !lastRaw) ? '<div class="t-line silence"><span class="t-who"></span><span class="t-what">silence</span></div>' : '';
     body.innerHTML = lines + silenceLine;
   }
 
@@ -821,9 +821,9 @@
       setGlow('slate');
       setPresenceArt('lens');
       setPill('info', 'Camera blocked'); setChip('info', 'Rung 1 · Holding');
-      $('heroTitle').textContent = 'Camera is blocked — checking on the resident';
+      $('heroTitle').textContent = 'Camera is blocked, checking on the resident';
       const informed = notify ? 'family informed on Alexa mobile.' : 'Nothing escalates while the room can\'t be read.';
-      $('heroSub').textContent = 'Coverage reads as privacy, not distress — ' + informed;
+      $('heroSub').textContent = 'Coverage reads as privacy, not distress. ' + informed;
       $('silLabel').textContent = 'No reading · lens covered';
       $('silNote').textContent = 'Living room · last reading 6 min ago';
       if (notify) {
@@ -844,7 +844,7 @@
       setPresenceArt('bust');
       setPill('ok', 'Resolved'); setChip('ok', 'Resolved · acknowledged');
       $('heroTitle').textContent = resolve && resolve.detail && resolve.detail.reason === 'alexa_checkin_ok'
-        ? 'The resident has responded' : 'Acknowledged — you took it from here';
+        ? 'The resident has responded' : 'Acknowledged. You took it from here';
       $('heroSub').textContent = 'same incident · Alexa+ agent remembers. The ladder stands down; the trail stays.';
       $('pushNote').hidden = true;
       $('silLabel').textContent = 'Silhouette · processed on device';
@@ -967,7 +967,7 @@
   }
 
   function requestCallStub() {
-    toast('Call requested — reserved fictional number, demo only');
+    toast('Call requested. Reserved fictional number, demo only');
   }
 
   function setMcpPill(active) {
@@ -1047,7 +1047,7 @@
     holdT2 = setTimeout(() => {
       cancelHold();
       lbl.textContent = LOCKED_MSG;
-      toast('Emergency dial stays off — no call can be placed from this build');
+      toast('Emergency dial stays off. No call can be placed from this build');
     }, 3000);
   });
   ['pointerup', 'pointerleave'].forEach(ev => $('gateHold').addEventListener(ev, cancelHold));

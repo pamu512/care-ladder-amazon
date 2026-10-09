@@ -205,7 +205,7 @@ def build_cases() -> list[EvalCase]:
         ),
         EvalCase(
             "clip_pedestrians_negative",
-            "OpenCV vtest pedestrians — no DISTRESS escalation (mild no_visibility when people exit frame is correct)",
+            "OpenCV vtest pedestrians: no DISTRESS escalation (mild no_visibility when people exit frame is correct)",
             "no_visibility",
             timeout_sec=80.0,
             frames=lambda: _seq_clip("vtest.avi", fps=10, sample_hz=5),

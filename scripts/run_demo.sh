@@ -26,7 +26,7 @@ echo "  Fire TV:  http://${HOST}:${PORT}/firetv/"
 echo "  MCP:      POST http://${HOST}:${PORT}/mcp  (Streamable HTTP)"
 echo "  Alexa+ sim: python -m care_ladder.mcp_server.alexa_sim --url http://${HOST}:${PORT}"
 echo "  POST /demo/run  {\"fixture\":\"alexa_path_a_soft_ok\"}"
-echo "  GET  /incidents/{id}  — incident timeline"
+echo "  GET  /incidents/{id}  : incident timeline"
 echo "Reserved phones only (NPA-555-01XX); emergency fail-closed; simulated call / speaker."
 
 exec "$UVICORN" care_ladder.api.app:app --host "$HOST" --port "$PORT"

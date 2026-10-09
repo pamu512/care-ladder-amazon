@@ -11,12 +11,12 @@ Product site: https://pamu512.github.io/care-ladder-amazon/
 
 ## Hackathon map
 
-Amazon **Build, Ship, Shape** (draft — no Final Submit).
+Amazon **Build, Ship, Shape** (draft: no Final Submit).
 
 | Surface | Role |
 | --- | --- |
-| **Alexa+ (primary)** | Self-hosted MCP care-flow tools + in-repo simulated Alexa+ MCP client. Multi-rung, multi-turn, incident session state — not single-turn Q&A. |
-| **Fire TV (supporting)** | Calm Care-Tech caregiver surface at `/firetv/` — D-pad focus, Ambient Hearth layout, data-driven from the live ladder API. |
+| **Alexa+ (primary)** | Self-hosted MCP care-flow tools + in-repo simulated Alexa+ MCP client. Multi-rung, multi-turn, incident session state, not single-turn Q&A. |
+| **Fire TV (supporting)** | Calm Care-Tech caregiver surface at `/firetv/`: D-pad focus, Ambient Hearth layout, data-driven from the live ladder API. |
 | **MCP** | Spec **2025-11-25+** Streamable HTTP at `/mcp`. |
 | **AWS Builder mini** | **In repo. Not deployed by CI.** SageMaker cue scoring is flag-gated (`CARE_LADDER_SAGEMAKER_ENDPOINT`) with local `models/fall_classifier.npz` fallback. AgentCore Gateway config fronts the same `/mcp` tools. Existing account stack: ECR, ECS Fargate, ALB, CloudFront, DynamoDB, S3, EventBridge (shared opencv host; this repo does not redeploy it). No Bedrock foundation model. |
 
@@ -28,18 +28,18 @@ only. See [docs/proactive-events-honesty.md](docs/proactive-events-honesty.md).
 
 ## Agentic proof (not thin MCP)
 
-Session state is keyed by **household + incident** (`household_id` + `incident_id`). Every MCP tool return includes a `session_snapshot` (`household_id`, `incident_id`, `rung`, `status`, `tools` trail) so the agent carries one memory across turns — not disconnected FAQ calls.
+Session state is keyed by **household + incident** (`household_id` + `incident_id`). Every MCP tool return includes a `session_snapshot` (`household_id`, `incident_id`, `rung`, `status`, `tools` trail) so one memory carries across turns, not disconnected FAQ calls.
 
 The in-repo MCP **client** `src/care_ladder/mcp_server/alexa_sim.py` drives a real HTTP initialize → `tools/call` chain and prints a `SESSION … rung=N status=…` banner after each call:
 
-1. `start_or_resume_incident` — open the incident
-2. `start_or_resume_incident` again with the same ids — resume-same-incident (`resumed: true`)
-3. `check_in_prompt` — fail-closed intent (`clear_ok` / `needs_human` / `unclear`)
-4. `advance_rung` / `notify_caretaker` / `resolve_incident` — same incident id throughout
+1. `start_or_resume_incident`: open the incident
+2. `start_or_resume_incident` again with the same ids: resume-same-incident (`resumed: true`)
+3. `check_in_prompt`: fail-closed intent (`clear_ok` / `needs_human` / `unclear`)
+4. `advance_rung` / `notify_caretaker` / `resolve_incident`: same incident id throughout
 
 Soft “don’t worry” can stand the ladder down; “okay but hurt” will not. Both Path A soft-OK and needs-human print resume-same-incident and keep one incident id from start → check-in → resolve/notify.
 
-## Quickstart (≤60s to something on screen)
+## Quickstart
 
 ```bash
 python3 -m venv .venv
@@ -62,7 +62,7 @@ CARE_LADDER_ALLOW_INSECURE_LOCAL=1 .venv/bin/uvicorn care_ladder.api.app:app --p
 .venv/bin/python -m care_ladder.mcp_server.alexa_sim --url http://127.0.0.1:8010 --answer "don't worry"
 ```
 
-MCP tool calls write the incident into the AuditStore Fire TV polls (`GET /incidents`). A calm **MCP agent active** pill shows on the TV only while the sim is driving, then auto-clears. Keep `/firetv/` visible — you should see the same incident change state within one sim run.
+MCP tool calls write the incident into the AuditStore Fire TV polls (`GET /incidents`). A calm **MCP agent active** pill shows on the TV only while the sim is driving, then auto-clears. Keep `/firetv/` visible. You should see the same incident change state within one sim run.
 
 Amazon household: `configs/amazon_demo_home.yaml` (resident + primary/secondary contacts, stillness 4m). `configs/demo_home.yaml` is the legacy OpenCV plan, kept for before/after regression.
 
@@ -96,15 +96,15 @@ MCP Streamable HTTP has DNS-rebinding protection on (`Host` allowlist: localhost
 
 `POST /demo/camera/start` accepts a device index, or an `rtsp`/`http(s)` URL whose host is `localhost` / `127.0.0.1` / `::1` or listed in `CARE_LADDER_CAMERA_HOSTS`. Hostnames are resolved; cloud metadata IPs and arbitrary remote hosts are rejected.
 
-Fire TV / console **reads** (`GET /plan`, `GET /incidents`) stay unauthenticated so the dashboard can poll. Fixture buttons, Acknowledge, and camera start/stop need the local opt-out or a bearer the page does not send — hosted token mode is for MCP / `curl`, not the in-page demo console.
+Fire TV / console **reads** (`GET /plan`, `GET /incidents`) stay unauthenticated so the dashboard can poll. Fixture buttons, Acknowledge, and camera start/stop need the local opt-out or a bearer the page does not send. Hosted token mode is for MCP / `curl`, not the in-page demo console.
 
 ## Privacy & fail-closed
 
-- **Silhouette-only** on Fire TV — no live video element, no raw frames.
+- **Silhouette-only** on Fire TV: no live video element, no raw frames.
 - Frames that leave the device path go through `blur_faces` / `to_silhouette` before attach.
 - Emergency dial is **off** and **hard-locked** in this demo build (hold-to-review explains; no call possible).
 - Demo phones are reserved NANP fiction only: **(555) 010-2276** (`+12125550176`).
-- Footer copy: *Wellness ladder — not a medical device.*
+- Footer copy: wellness ladder, not a medical device.
 
 Known limits: [`docs/failure-modes.md`](docs/failure-modes.md). Why this design: [`docs/research-brief.md`](docs/research-brief.md).
 
@@ -140,7 +140,7 @@ Architecture gallery refresh is a follow-up (Grok Bot). No Final Submit from thi
 
 ## Shared demo host (read-only from this repo)
 
-Live HTTPS today: https://d2u7pls4da2poz.cloudfront.net/ — **shared host from the opencv-care-ladder stack**. CI on this repo is **test-only** (no auto-deploy) so OpenCV judges keep a stable CloudFront. Optional AWS replay: [`infra/README.md`](infra/README.md). Local run needs no AWS credentials: `./scripts/run_demo.sh`.
+Live HTTPS today: https://d2u7pls4da2poz.cloudfront.net/ (**shared host from the opencv-care-ladder stack**). CI on this repo is **test-only** (no auto-deploy) so OpenCV judges keep a stable CloudFront. Optional AWS replay: [`infra/README.md`](infra/README.md). Local run needs no AWS credentials: `./scripts/run_demo.sh`.
 
 Vision ONNX models and eval clips are **not** committed. If you want the optional vision-trigger proofs: `./scripts/download_models.sh` and `./scripts/download_clips.sh`. Alexa+ fixtures do not need ONNX.
 

@@ -23,7 +23,7 @@ Ship a **significant update** of Care Ladder that wins Stage 1 on the **Alexa+**
 
 | Decision | Lock |
 | --- | --- |
-| Approach | **A — Alexa+ primary** |
+| Approach | **A: Alexa+ primary** |
 | Vision trigger | **Keep OpenCV camera cues** (stillness / no-visibility / distress-family) |
 | Voice / agent path | **Alexa+** monitoring + check-in via self-hosted **MCP** (spec ≥ 2025-11-25, Streamable HTTP) and/or **Agent Skill**, plus simulated Alexa+ web path if needed for demo |
 | Caregiver surface | **Fire TV** dashboard (Fire OS or Vega OS / simulator OK), design locked by `fire-tv-dashboard/` prototypes |
@@ -151,10 +151,10 @@ Camera / clip feed
 - Not a single-turn FAQ wrapper around one API.
 - Product feedback notes on every Amazon tool/API/SDK used (submission requirement).
 - Prototype prompt examples (voice surface quotes these on the TV):
-  - Stillness: “Meera, are you okay?” then “Meera, it’s Anoop’s Care Ladder — can you hear me?”
-  - Occlusion: “Meera, the camera is covered — could you move the blanket?”
+  - Stillness: “Meera, are you okay?” then “Meera, it’s Anoop’s Care Ladder. Can you hear me?”
+  - Occlusion: “Meera, the camera is covered. Could you move the blanket?”
 
-### 8.4 Fire TV surface (supporting) — UX lock from handoff
+### 8.4 Fire TV surface (supporting): UX lock from handoff
 
 **Source of truth (do not invent a different TV UI without editing this PRD):**
 
@@ -169,7 +169,7 @@ Camera / clip feed
 - Top bar: Care Ladder brand · “Meera’s home · Fire TV” · status pill · clock
 - Main grid: large hero card (rung chip, incident id, title, subcopy, wait segments, actions) + right rail (silhouette panel + Alexa+ check-in transcript)
 - Bottom: horizontal **AUDIT TRAIL**
-- Footer: “Wellness ladder — not a medical device” · “Emergency dial off by default” · plan summary · **Demo console**
+- Footer: “Wellness ladder, not a medical device” · “Emergency dial off by default” · plan summary · **Demo console**
 
 **Status pill vocabulary:** Care plan active / Re-checking / Checking on Meera / Calling Anoop / Resolved (and Camera blocked on occlusion path).
 
@@ -207,7 +207,7 @@ Accents are rationed: **one attention color per screen**.
 | Wait closed | Rung 3 · Wait closed | (bridge to notify) |
 | Notify | Rung 4 · Notify caretaker | Meera has not responded · calling Anoop · Acknowledge / Request call / Emergency off |
 | Occlusion Path B | Rung 1 holding → ask to move blanket → Rung 4 inform | Coverage reads as privacy, not distress; later: camera still covered · **no distress is being claimed** |
-| Resolved | Resolved · acknowledged | Acknowledged — you took it from here · trail preserved |
+| Resolved | Resolved · acknowledged | Acknowledged. You took it from here · trail preserved |
 
 **Interaction:**
 
@@ -290,7 +290,7 @@ Exact dates can slip; **Submit buffer** before 2026-10-24 03:00 HKT is mandatory
 - [ ] Fire TV UX §8.4 accepted or revised  
 - [ ] Milestones §10 accepted or revised  
 - [ ] Open questions §12 answered  
-- [ ] Ready for implementation plan (`writing-plans`) — **no coding until this box is checked**
+- [ ] Ready for implementation plan (`writing-plans`). **No coding until this box is checked**
 
 ---
 

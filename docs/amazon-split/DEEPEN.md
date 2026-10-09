@@ -1,4 +1,4 @@
-# DEEPEN — make Amazon criteria loud without drowning the calm product
+# DEEPEN: make Amazon criteria loud without drowning the calm product
 
 **Product north star:** Calm dementia / senior **care ladder** (empathetic Ambient Hearth, silhouette-only, fail-closed).  
 **Hackathon scream:** Alexa+ primary · multi-step agentic + **session state** · MCP Streamable HTTP · Fire TV supporting · friction log (+10%) · ≤3 min device-truth video.  
@@ -10,7 +10,7 @@ Ranked by **judge impact ÷ product risk**. Effort: S ≤0.5d · M ~1d · L mult
 
 ---
 
-## Rank 1 — (a) Agentic multi-rung session-state narrative (code + UI copy)
+## Rank 1: (a) Agentic multi-rung session-state narrative (code + UI copy)
 
 ### Why judges care
 Alexa+ creative bar fails “thin MCP” (single-turn FAQ wrapping one API). Criteria want **multi-step agentic** flows with **session state**. Care Ladder already has incident sessions + seven tools; judges must *see* household+incident continuity and rung memory in under 3 minutes.
@@ -19,7 +19,7 @@ Alexa+ creative bar fails “thin MCP” (single-turn FAQ wrapping one API). Cri
 1. **Code:** Ensure every MCP tool return includes `household_id`, `incident_id`, `rung` / `status`, and `tools` trail (partially present on `get_incident_status` / `start_or_resume_incident`). Add a single `session_snapshot` field reused by tools so the sim transcript reads as one agent memory, not disconnected calls.  
 2. **alexa_sim.py:** Print a one-line “SESSION … rung=N status=…” banner between tool calls; Path A soft-OK and needs-human both show resume-same-incident.  
 3. **Fire TV copy (calm):** Hero subcopy already names attempts/wait; tighten Ambient Hearth lines to say “same incident · Alexa+ agent remembers” without ops jargon. Rung rail labels stay human (“Alexa+ voice check-in ×2”), not raw tool names in the hero.  
-4. **Audit trail:** Keep mono timestamps; optionally prefix MCP-driven events with a quiet `via mcp` detail flag for the video zoom — visible to judges, not shouty in standby.
+4. **Audit trail:** Keep mono timestamps; optionally prefix MCP-driven events with a quiet `via mcp` detail flag for the video zoom. Visible to judges, not shouty in standby.
 
 ### Effort / owner
 - **M** · **Hermes** implements; **Anoop** approves VO/UI strings; Careladder-AWS verifies after split.
@@ -32,16 +32,16 @@ Alexa+ creative bar fails “thin MCP” (single-turn FAQ wrapping one API). Cri
 
 ---
 
-## Rank 2 — (d) Demo path that shows live MCP → ladder → Fire TV
+## Rank 2: (d) Demo path that shows live MCP → ladder → Fire TV
 
 ### Why judges care
-Submission rules: repo must **call** the track tech in code; video must show Agent Skill or MCP (or sim) **in action**. Device-truth ≤3 min — lead with best material. Shot 8 in `docs/demo-video-script-amazon.md` already plans terminal sim; deepen so Fire TV updates *while* MCP calls land (one story, not two demos glued).
+Submission rules: repo must **call** the track tech in code; video must show Agent Skill or MCP (or sim) **in action**. Device-truth ≤3 min. Lead with best material. Shot 8 in `docs/demo-video-script-amazon.md` already plans terminal sim; deepen so Fire TV updates *while* MCP calls land (one story, not two demos glued).
 
 ### What to deepen
 1. **Single choreography script** (docs + optional `scripts/amazon_demo_path.sh`): start uvicorn → open `/firetv/` → run `alexa_sim` with `--answer "don't worry"` → TV resolves; second run needs-human → TV stays notify → Acknowledge.  
-2. **Sim → API coupling:** Confirm alexa_sim mutations are the same store the Fire TV polls (already same FastAPI app); add a visible “MCP agent active” calm pill on TV **only while** an MCP session is driving (auto-clear) — optional S if time.  
+2. **Sim → API coupling:** Confirm alexa_sim mutations are the same store the Fire TV polls (already same FastAPI app); add a visible “MCP agent active” calm pill on TV **only while** an MCP session is driving (auto-clear). Optional S if time.  
 3. **Video order:** Keep calm product first (shots 3–7), MCP proof mid-late (shot 8), never open on a terminal wall of JSON.  
-4. **Device truth:** Prefer Fire TV stick Silk or official simulator in frame for supporting track credibility; browser-at-1280×720 acceptable fallback if stick unavailable — Anoop decides hardware.
+4. **Device truth:** Prefer Fire TV stick Silk or official simulator in frame for supporting track credibility; browser-at-1280×720 acceptable fallback if stick unavailable. Anoop decides hardware.
 
 ### Effort / owner
 - **S–M** · **Hermes** script + wiring; **Anoop** records VO/video; Careladder-AWS checks live URL notes.
@@ -53,13 +53,13 @@ Submission rules: repo must **call** the track tech in code; video must show Age
 
 ---
 
-## Rank 3 — (b) MCP tool visibility in Fire TV / UI
+## Rank 3: (b) MCP tool visibility in Fire TV / UI
 
 ### Why judges care
 Design + Tech Implementation: coherent product on the target surface. Tools must be real in repo; TV should make the **agent path** legible without turning the living-room UI into a developer console.
 
 ### What to deepen (calm visibility)
-1. **Caregiver-facing (primary):** Keep “Alexa+ check-in” transcript + rung rail — already good. Add a single footer/meta line when events came from MCP: `Agent path · MCP` in ink-40, not a tool dump.  
+1. **Caregiver-facing (primary):** Keep “Alexa+ check-in” transcript + rung rail. Already good. Add a single footer/meta line when events came from MCP: `Agent path · MCP` in ink-40, not a tool dump.  
 2. **Judge-facing (secondary, toggled):** Demo console “Show agent tools” expands a mono list of the seven tool names used *this incident* (from audit/`tools` array). Off by default so standby stays calm.  
 3. **Do not** put JSON-RPC payloads on the 10-foot hero.
 
@@ -73,10 +73,10 @@ Design + Tech Implementation: coherent product on the target surface. Tools must
 
 ---
 
-## Rank 4 — (c) Friction-log completeness (+10% judging bonus)
+## Rank 4: (c) Friction-log completeness (+10% judging bonus)
 
 ### Why judges care
-Explicit bonus up to **10%** for friction logs: task attempted, steps, expected vs actual, severity, workaround, actionable suggestion — per tool/API/SDK used. Current `docs/friction-log.md` is strong on **mcp SDK + Streamable HTTP**, weak on **Fire TV/Silk** and **CloudFront/ALB `/mcp`** (marked pending).
+Explicit bonus up to **10%** for friction logs: task attempted, steps, expected vs actual, severity, workaround, actionable suggestion, per tool/API/SDK used. Current `docs/friction-log.md` is strong on **mcp SDK + Streamable HTTP**, weak on **Fire TV/Silk** and **CloudFront/ALB `/mcp`** (marked pending).
 
 ### What to deepen
 Fill pending surfaces honestly as touched:
@@ -84,11 +84,11 @@ Fill pending surfaces honestly as touched:
 | Surface | Minimum entry |
 | --- | --- |
 | Fire TV / Silk (or simulator) | Launch URL, D-pad/remote, recording 1280×720, any focus/CSS pain |
-| CloudFront/ALB `/mcp` (if deployed) | Host header / DNS-rebinding 421 already noted — confirm prod path or document “local-only MCP in video” |
+| CloudFront/ALB `/mcp` (if deployed) | Host header / DNS-rebinding 421 already noted. Confirm prod path or document “local-only MCP in video” |
 | uvicorn + FastAPI mount | Cross-link ASGI lifespan lesson (already written) |
 | Optional: httpx2 / TestClient | Only if it burned time |
 
-Also paste a **short** friction summary into Devpost “tool feedback” field (draft already sketches three bullets — extend when Fire TV entry exists).
+Also paste a **short** friction summary into Devpost “tool feedback” field (draft already sketches three bullets; extend when Fire TV entry exists).
 
 ### Effort / owner
 - **S** · **Hermes** drafts from real attempts; **Anoop** edits tone for submit; Careladder-AWS ensures file present in `care-ladder-amazon`.
@@ -100,7 +100,7 @@ Also paste a **short** friction summary into Devpost “tool feedback” field (
 
 ---
 
-## Rank 5 — Polish that helps without scope creep
+## Rank 5: Polish that helps without scope creep
 
 | Item | Why | Effort | Owner |
 | --- | --- | --- | --- |
@@ -117,7 +117,7 @@ Also paste a **short** friction summary into Devpost “tool feedback” field (
 | --- | --- |
 | **Bee** | Track needs live Bee (or Apple Watch Bee) data; we do not have it; filing would fail honesty bar |
 | **Ring** | Out of lock; dilutes Alexa+ primary story |
-| **Bedrock / AgentCore / Strands / Kiro Crew** | AWS Builder mini only if **real** in-tree; PRD/devpost say not filed — do not sprinkle imports for show |
+| **Bedrock / AgentCore / Strands / Kiro Crew** | AWS Builder mini only if **real** in-tree; PRD/devpost say not filed. Do not sprinkle imports for show |
 | Classic ASK-only skill as Stage-1 gate | Not the Alexa+ MCP/Agent bar |
 | Live camera on Fire TV / raw frames | Breaks privacy pillar; voyeurism risk |
 | Auto-911 / enabling emergency in demo | Fail-closed lock; hard gate stays locked |

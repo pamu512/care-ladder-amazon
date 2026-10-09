@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "care-ladder"
 version = "0.1.0"
-description = "Alexa+ / Fire TV care ladder — self-hosted MCP Streamable HTTP agent and silhouette caregiver dashboard"
+description = "Alexa+ / Fire TV care ladder: self-hosted MCP Streamable HTTP agent and silhouette caregiver dashboard"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [

@@ -803,7 +803,7 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
         if not ok:
             raise HTTPException(
                 status_code=422,
-                detail="clip could not be decoded — is it a valid video file?",
+                detail="clip could not be decoded. Is it a valid video file?",
             )
         h, w = first.shape[:2]
         detector.zone = np.asarray(
@@ -823,7 +823,7 @@ def create_app(store: AuditStore | None = None) -> FastAPI:
                 status_code=422,
                 detail=(
                     f"no cue emitted from clip ({result.frame_count} frames, "
-                    f"{result.duration_sec}s) — try a clip with a still person, "
+                    f"{result.duration_sec}s). Try a clip with a still person, "
                     "someone leaving frame, or lying on the floor"
                 ),
             )
