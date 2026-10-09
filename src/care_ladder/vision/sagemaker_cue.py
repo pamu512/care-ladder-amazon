@@ -294,7 +294,7 @@ def _sample_model_request() -> dict[str, Any]:
                 "sagemaker-scikit-learn:1.2-1-cpu-py3"
             ),
             "ModelDataUrl": "s3://example-bucket/care-ladder/cue/model.tar.gz",
-            "Environment": {"SAGEMAKER_PROGRAM": "inference.py"},
+            "Environment": {"SAGEMAKER_PROGRAM": "inference.py", "SAGEMAKER_SUBMIT_DIRECTORY": "/opt/ml/model/code"},
         },
     }
 
@@ -490,7 +490,7 @@ def _deploy_endpoint() -> int:
             "PrimaryContainer": {
                 "Image": image,
                 "ModelDataUrl": f"s3://{bucket}/{key}",
-                "Environment": {"SAGEMAKER_PROGRAM": "inference.py"},
+                "Environment": {"SAGEMAKER_PROGRAM": "inference.py", "SAGEMAKER_SUBMIT_DIRECTORY": "/opt/ml/model/code"},
             },
         }
         validate_payload("sagemaker", "CreateModel", model_payload)
