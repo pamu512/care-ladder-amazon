@@ -7,7 +7,7 @@ Design:
 - Table ``care-ladder-incidents`` (created on demand), PK ``incident_id`` (S).
 - Item = full Incident JSON + serialized privacy-transformed frames (PNG bytes,
   base64) so the caregiver clip viewer works from any task instance.
-- Frames are ONLY the blur/silhouette copies — the same guarantee as memory.
+- Frames are ONLY the blur/silhouette copies - the same guarantee as memory.
 """
 
 from __future__ import annotations
@@ -44,7 +44,13 @@ def _to_native(value: Any) -> Any:
 
 
 def _from_native(value: Any) -> Any:
-    """Decimal → float/int for pydantic round-trips."""
+    """Decimal → float/int for pydantic round-trips.
+
+    Also unwraps legacy DynamoDB AttributeValue maps (keys like S/N/M/L/BOOL/NULL)
+    left behind when an older writer put wire-format dicts into a resource client
+    (boto3 then stored them as Maps). Shared care-ladder-incidents rows from the
+    opencv stack need this path or GET /incidents 500s.
+    """
     from decimal import Decimal
 
     if isinstance(value, Decimal):
@@ -53,6 +59,12 @@ def _from_native(value: Any) -> Any:
     if isinstance(value, list):
         return [_from_native(v) for v in value]
     if isinstance(value, dict):
+        keys = set(value.keys())
+        av = {"S", "N", "B", "BOOL", "NULL", "M", "L", "SS", "NS", "BS"}
+        if keys and keys <= av and len(keys) == 1:
+            from boto3.dynamodb.types import TypeDeserializer
+
+            return _from_native(TypeDeserializer().deserialize(value))
         return {k: _from_native(v) for k, v in value.items()}
     return value
 
@@ -112,7 +124,7 @@ class DynamoAuditStore(AuditStore):
             item[_FRAMES_ATTR] = _frames_to_b64(frames)
         item["saved_at"] = int(time.time())
         # boto3 resource-style clients expect NATIVE types (str/int/list/dict),
-        # not low-level AttributeValue maps — the manual marshaller wrapped the
+        # not low-level AttributeValue maps - the manual marshaller wrapped the
         # key as {"S": ...} which boto3 re-wrapped as a Map, breaking the schema.
         ddb_item = _to_native(dict(item))
         ddb_item["incident_id"] = incident.id
@@ -151,7 +163,15 @@ class DynamoAuditStore(AuditStore):
             data = _from_native(dict(item))
             data.pop("incident_id", None)
             data.pop(_FRAMES_ATTR, None)
-            out.append(Incident.model_validate(data))
+            try:
+                out.append(Incident.model_validate(data))
+            except Exception as exc:
+                # Shared-table legacy rows must not take down GET /incidents.
+                import logging
+
+                logging.getLogger("care_ladder.dynamo_store").warning(
+                    "skipping unreadable incident: %s", exc
+                )
         return sorted(out, key=lambda i: i.id)
 
 
