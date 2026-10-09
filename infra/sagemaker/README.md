@@ -28,7 +28,7 @@ Needs a role that can read the model object, a private bucket, and an image that
 export CARE_LADDER_SAGEMAKER_DEPLOY=1
 export CARE_LADDER_SAGEMAKER_ROLE_ARN=arn:aws:iam::ACCOUNT:role/CareLadderSageMaker
 export CARE_LADDER_SAGEMAKER_BUCKET=your-private-bucket
-export CARE_LADDER_SAGEMAKER_IMAGE=763104351884.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3
+export CARE_LADDER_SAGEMAKER_IMAGE=683313688378.dkr.ecr.us-east-1.amazonaws.com/sagemaker-scikit-learn:1.2-1-cpu-py3
 export CARE_LADDER_SAGEMAKER_REGION=us-east-1
 python -m care_ladder.vision.sagemaker_cue --deploy
 export CARE_LADDER_SAGEMAKER_ENDPOINT=care-ladder-cue
