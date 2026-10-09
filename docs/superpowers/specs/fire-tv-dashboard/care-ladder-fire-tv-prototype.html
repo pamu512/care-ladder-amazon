@@ -11,9 +11,9 @@
     --surface: #2E2B25;
     --surface-2: #35322A;
     --ink: #EFEAE2;
-    --ink-60: rgba(239,234,226,0.62);
-    --ink-40: rgba(239,234,226,0.40);
-    --ink-25: rgba(239,234,226,0.25);
+    --ink-60: rgba(239,234,226,0.78);
+    --ink-40: rgba(239,234,226,0.78);
+    --ink-25: rgba(239,234,226,0.78);
     --line: rgba(239,234,226,0.09);
     --sage: #A8B5A0;
     --sage-dim: rgba(168,181,160,0.16);
@@ -53,7 +53,7 @@
 
   /* ── Top bar ── */
   .topbar {
-    display: flex; align-items: center; gap: 18px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
     padding: clamp(14px, 2.2vw, 22px) clamp(20px, 3.5vw, 44px);
     border-bottom: 1px solid var(--line);
   }
@@ -97,7 +97,7 @@
     border-radius: var(--radius);
     padding: clamp(16px, 2vw, 24px);
   }
-  .card:focus { outline: none; }
+  .card:focus { outline: none; box-shadow: var(--focus); }
 
   /* ── Hero (incident) ── */
   .hero { display: flex; flex-direction: column; gap: clamp(12px, 1.6vw, 18px); }
@@ -202,7 +202,7 @@
 
   /* ── Footer ── */
   .foot {
-    display: flex; align-items: center; gap: 18px;
+    display: flex; align-items: center; gap: 18px; flex-wrap: wrap;
     padding: 12px clamp(20px, 3.5vw, 44px) 16px;
     border-top: 1px solid var(--line);
     font-size: 11.5px; color: var(--ink-40);
@@ -352,7 +352,7 @@
     <!-- Right column -->
     <div class="side">
 
-      <section class="card silhouette" id="silCard" tabindex="0" aria-label="Room view — privacy silhouette">
+      <section class="card silhouette" id="silCard" tabindex="0" aria-label="Room view, privacy silhouette">
         <div class="sil-figure" id="silFigure"></div>
         <div class="sil-label" id="silLabel">Silhouette · processed on device</div>
         <div class="sil-note" id="silNote">Living room · last reading just now</div>
@@ -361,7 +361,7 @@
       <section class="card transcript" aria-label="Voice check-in transcript">
         <div class="transcript-title">Alexa+ check-in</div>
         <div id="transcriptBody">
-          <div class="t-empty" id="tEmpty">No check-in running. The last one resolved at 11:02 — Meera answered on the first attempt.</div>
+          <div class="t-empty" id="tEmpty">No check-in running.</div>
         </div>
       </section>
     </div>
@@ -374,7 +374,7 @@
   </main>
 
   <footer class="foot">
-    <span>Wellness ladder — not a medical device</span>
+    <span>Wellness ladder, not a medical device</span>
     <span class="sep">·</span>
     <span>Emergency dial off by default</span>
     <span class="sep">·</span>
@@ -403,13 +403,13 @@
   <div class="gate" role="alertdialog" aria-modal="true" aria-labelledby="gateTitle" aria-describedby="gateBody">
     <div class="gate-title" id="gateTitle">Emergency dial is off</div>
     <div class="gate-body" id="gateBody">
-      Care Ladder never calls emergency services on its own. This rung stays disabled unless a human turns it on, here, behind this gate — and in this demo build it is hard-locked: holding will explain what a live build would do, but no call can ever be placed.
+      Care Ladder never calls emergency services on its own. This rung stays disabled unless a human turns it on, here, behind this gate, and in this demo build it is hard-locked: holding will explain what a live build would do, but no call can ever be placed.
     </div>
     <button class="gate-hold" id="gateHold">
       <span class="progress" aria-hidden="true"></span>
       <span class="lbl">Hold 3s to review enabling</span>
     </button>
-    <button class="gate-cancel" id="gateCancel">Close — keep it off</button>
+    <button class="gate-cancel" id="gateCancel">Close, keep it off</button>
   </div>
 </div>
 
@@ -513,7 +513,7 @@
     $('silFigure').className = 'sil-figure';
     $('silLabel').textContent = 'Silhouette · processed on device';
     $('silNote').textContent = 'Living room · last reading just now';
-    clearTranscript('No check-in running. The last one resolved at 11:02 — Meera answered on the first attempt.');
+    clearTranscript('No check-in running.');
     setActions([
       { label: 'View care plan', cls: 'btn btn-secondary', fn: () => toast('Care plan: living-room stillness 4m · contacts Anoop → Priya → neighbor · emergency off') },
     ]);
@@ -559,7 +559,7 @@
       renderWait();
       if (state.waitLeft === 22 && state.attempt === 1) {
         state.attempt = 2;
-        tLine('Alexa+', '“Meera, it’s Anoop’s Care Ladder — can you hear me?”');
+        tLine('Alexa+', '“Meera, it’s Anoop’s Care Ladder. Can you hear me?”');
         audit('rung 2', 'attempt 2 · no speech detected', 'var(--amber)');
       }
       if (state.waitLeft <= 0) toWaitDone();
@@ -582,7 +582,7 @@
     setChip('attend', 'Rung 3 · Wait closed');
     $('waitBar').hidden = true;
     audit('rung 3', 'wait window closed · 45s silence', 'rgba(239,234,226,0.4)');
-    tLine('—', 'silence · 45s', true);
+    tLine('', 'silence · 45s', true);
     setTimeout(() => { if (state.phase === 'wait') toNotify(); }, 900);
   }
 
@@ -597,7 +597,7 @@
     audit('rung 4', 'caretaker notified · push + TV', 'var(--clay)');
     setActions([
       { label: 'Acknowledge', cls: 'btn btn-primary', icon: false, fn: ack },
-      { label: 'Request call · (555) 010-2276', cls: 'btn btn-secondary', icon: true, fn: () => { audit('rung 4', 'call requested · (555) 010-2276 · fictional', 'var(--clay)'); toast('Call requested — reserved fictional number, demo only'); } },
+      { label: 'Request call · (555) 010-2276', cls: 'btn btn-secondary', icon: true, fn: () => { audit('rung 4', 'call requested · (555) 010-2276 · fictional', 'var(--clay)'); toast('Call requested. Reserved fictional number, demo only'); } },
       { label: 'Emergency · off', cls: 'btn btn-danger-off', disabled: true, fn: null },
     ]);
     // wire the dashed emergency button to the gate despite disabled look
@@ -611,7 +611,7 @@
     state.phase = 'resolved';
     setPill('ok', 'Resolved');
     setChip('ok', 'Resolved · acknowledged');
-    $('heroTitle').textContent = 'Acknowledged — you took it from here';
+    $('heroTitle').textContent = 'Acknowledged. You took it from here';
     $('heroSub').textContent = 'The ladder stands down. The incident and its full trail stay in the audit log.';
     $('pushNote').hidden = true;
     $('waitBar').hidden = true;
@@ -629,10 +629,10 @@
     setPill('ok', 'Resolved');
     setChip('ok', 'Resolved · voice');
     $('heroTitle').textContent = 'Meera has responded';
-    $('heroSub').textContent = '“I’m okay — just resting.” The ladder stands down after a spoken answer.';
+    $('heroSub').textContent = '“I’m okay, just resting.” The ladder stands down after a spoken answer.';
     $('waitBar').hidden = true;
     $('pushNote').hidden = true;
-    tLine('Meera', '“I’m okay — just resting.”');
+    tLine('Meera', '“I’m okay, just resting.”');
     audit('rung 2', 'resolved · Meera answered · attempt ' + Math.max(1, state.attempt), 'var(--sage)');
     setActions([
       { label: 'Back to all clear', cls: 'btn btn-primary', fn: () => toAllClear() },
@@ -646,8 +646,8 @@
     setPill('info', 'Camera blocked');
     setChip('info', 'Rung 1 · Holding');
     $('incId').textContent = 'camera health · ' + fmtT(nowFake()).slice(0, 5);
-    $('heroTitle').textContent = 'Camera is blocked — checking on Meera';
-    $('heroSub').textContent = 'Coverage reads as privacy, not distress — nothing escalates while the room can’t be read.';
+    $('heroTitle').textContent = 'Camera is blocked, checking on Meera';
+    $('heroSub').textContent = 'Coverage reads as privacy, not distress. Nothing escalates while the room can’t be read.';
     $('waitBar').hidden = true;
     $('pushNote').hidden = true;
     $('silFigure').className = 'sil-figure occluded';
@@ -659,7 +659,7 @@
     // stage 2: voice check despite occlusion — ask Meera to move the blanket
     setTimeout(() => {
       if (state.phase !== 'occluded') return;
-      tLine('Alexa+', '“Meera, the camera is covered — could you move the blanket?”');
+      tLine('Alexa+', '“Meera, the camera is covered. Could you move the blanket?”');
       audit('rung 2', 'asked Meera to move the blanket', 'var(--amber)');
     }, 2800);
     // stage 3: still no answer → call Anoop to inform
@@ -668,8 +668,8 @@
       setPill('urgent', 'Calling Anoop');
       setChip('urgent', 'Rung 4 · Notify caretaker');
       $('heroTitle').textContent = 'Meera has not responded · calling Anoop to inform';
-      $('heroSub').textContent = 'Camera still covered · no voice answer · informing Anoop — no distress is being claimed.';
-      tLine('—', 'no answer', true);
+      $('heroSub').textContent = 'Camera still covered · no voice answer · informing Anoop. No distress is being claimed.';
+      tLine('', 'no answer', true);
       audit('rung 4', 'no answer · caretaker informed · camera covered', 'var(--clay)');
       setActions([
         { label: 'Acknowledge', cls: 'btn btn-primary', fn: ack },
@@ -707,9 +707,9 @@
     }, 50);
     holdT2 = setTimeout(() => {
       cancelHold();
-      lbl.textContent = 'Hard-locked in this build — a live install would require re-enabling in care plan settings';
+      lbl.textContent = 'Hard-locked in this build. A live install would require re-enabling in care plan settings';
       audit('gate', 'emergency review opened · remains disabled', 'var(--clay)');
-      toast('Emergency dial stays off — no call can be placed from this build');
+      toast('Emergency dial stays off. No call can be placed from this build');
     }, 3000);
   });
   ['pointerup', 'pointerleave'].forEach(ev => $('gateHold').addEventListener(ev, cancelHold));
@@ -781,7 +781,7 @@
       [12400, () => ack()],
     ];
     seq.forEach(([t, fn]) => state.demoTimers.push(setTimeout(fn, t)));
-    toast('Auto demo running — full ladder in ~13s');
+    toast('Auto demo running. Full ladder in about 13s');
   });
 
   // seed a quiet history so the audit never looks empty on load

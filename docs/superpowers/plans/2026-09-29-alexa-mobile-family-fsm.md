@@ -1,10 +1,10 @@
-# Alexa Mobile Caregiver + Shared FSM Beats — Implementation Plan
+# Alexa Mobile Caregiver + Shared FSM Beats: Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 >
 > **Status:** PLAN ONLY. Do **not** implement, open PRs, or Final Submit until Devt/Anoop say go.
 > **Repo:** `pamu512/care-ladder-amazon` @ main `606da4e8d188` (Rank 1–4 + CI merged; pytest 106).
-> **Source FSM contract:** `/workspace/care-ladder-console-handoff/home/home-guide.md` (Family Chat-First) beats only — **not** WA/TG adapters.
+> **Source FSM contract:** `/workspace/care-ladder-console-handoff/home/home-guide.md` (Family Chat-First) beats only, **not** WA/TG adapters.
 > **Owner:** Careladder-AWS (`df7af528-…`). Hermes = Mac Cursor worker when coding starts.
 
 **Goal:** Port the shared family-chat FSM beats onto the Alexa+ session so caregiver ack happens in the **Alexa mobile skill** (talk/ack stops the ladder), while Fire TV stays a supporting in-home visual (frames, timeline, MCP demo), with optional thin Proactive Events as awareness-only.
@@ -19,7 +19,7 @@
 - Port **FSM + copy**, not WhatsApp/Telegram `BotThread` adapters.
 - Caregiver surface on Amazon = **Alexa mobile** (open skill, conversational ack, stop ladder).
 - Proactive Events = thin awareness chime only (schema-locked, opt-in); not rich buttons; document honesty.
-- Fire TV = living-room frames / ladder timeline / MCP demo only — **not** the caregiver pager.
+- Fire TV = living-room frames / ladder timeline / MCP demo only, **not** the caregiver pager.
 - Notify copy/stills: blurred frame + countdown + **three clear actions**.
 - Docs/VO: console = **setup + archive** honesty (not the live pager).
 - SKIP: full WA/TG BotThread in this repo; Stripe/Portal/facility gov; Ring/Bee/auto-911; merge into opencv `main`.
@@ -112,7 +112,7 @@ idle → speaker_window → family_paged → pressure → calling_N → closed
 ANY ack → stop escalation; ask outcome; close with documentation
 ```
 
-Three inform actions (design): “I'm on it — call her myself” / “Call Mom now” / “Can't take it — go to {next}”.
+Three inform actions (design): “I'm on it, call her myself” / “Call Mom now” / “Can't take it, go to {next}”.
 
 ---
 
@@ -120,7 +120,7 @@ Three inform actions (design): “I'm on it — call her myself” / “Call Mom
 
 | Phase | Delivers | Depends |
 | --- | --- | --- |
-| **A0 · Plan lock** | This doc reviewed; go from Devt/Anoop | — |
+| **A0 · Plan lock** | This doc reviewed; go from Devt/Anoop | (none) |
 | **A1 · FSM core + timestamps** | Channel-agnostic conversation FSM + `AuditEvent.at` | A0 |
 | **A2 · Alexa mobile caregiver surface** | MCP/sim tools for family_paged / ack / outcome; remap notify channels | A1 |
 | **A3 · Fire TV reframe** | Copy/UI: supporting visual, not pager; keep timeline/MCP; soft stills hooks | A2 |
@@ -232,7 +232,7 @@ Three clear action phrasings must match inform card labels.
 Honesty limits (must appear in README/friction):
 - Alexa Proactive Events / skill messaging is **schema-locked**; no free-form rich notify.
 - Opt-in only; may be unavailable in sim; demo must not claim push buttons arrived via PE.
-- Role = **awareness chime** (“check Alexa app”) that fans into the mobile skill session — not a substitute for conversational ack.
+- Role = **awareness chime** (“check Alexa app”) that fans into the mobile skill session, not a substitute for conversational ack.
 - If Amazon APIs unavailable in hackathon window: stub + document “local sim only”.
 
 - [ ] Stub interface `send_awareness_chime(household_id, incident_id) -> {simulated: true}`.

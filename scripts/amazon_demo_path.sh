@@ -122,11 +122,11 @@ if [[ "$CHECK" != "1" ]]; then
   elif command -v open >/dev/null 2>&1; then
     open "${BASE}/firetv/" || true
   fi
-  echo "Open ${BASE}/firetv/ now. The TV polls /incidents — keep it visible."
+  echo "Open ${BASE}/firetv/ now. The TV polls /incidents. Keep it visible."
   echo
 fi
 
-echo "== Path 1 · soft OK — sim --answer \"don't worry\" → TV resolves =="
+echo "== Path 1 · soft OK: sim --answer \"don't worry\" → TV resolves =="
 "$PY" -m care_ladder.mcp_server.alexa_sim --url "$BASE" --answer "don't worry"
 soft="$(latest_incident)"
 echo "TV poll: ${soft}"
@@ -140,7 +140,7 @@ print("ok: same incident resolved on the store Fire TV polls")
 PY
 
 echo
-echo "== Path 2 · needs-human — TV stays notify → Acknowledge on the TV =="
+echo "== Path 2 · needs-human: TV stays notify → Acknowledge on the TV =="
 "$PY" -m care_ladder.mcp_server.alexa_sim --url "$BASE" --answer "I'm okay but I think I'm hurt"
 human="$(latest_incident)"
 echo "TV poll: ${human}"
@@ -150,12 +150,12 @@ row = json.loads(sys.argv[1])
 assert row["status"] != "resolved", row
 assert "notify_caretaker" in row["tools"], row
 assert "hurt" in (row.get("reply") or "").lower(), row
-print("ok: notify stays up — click Acknowledge on Fire TV to close the loop")
+print("ok: notify stays up. Click Acknowledge on Fire TV to close the loop")
 PY
 
 echo
 echo "Acknowledge: on /firetv/ press Acknowledge (or POST ${BASE}/incidents/<id>/ack)."
 if [[ "$CHECK" != "1" && "$started_server" == "1" ]]; then
-  echo "Server still running (pid ${pid}) at ${BASE} — Ctrl-C in that job or kill ${pid} when done."
+  echo "Server still running (pid ${pid}) at ${BASE}. Ctrl-C in that job or kill ${pid} when done."
   trap - EXIT
 fi

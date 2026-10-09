@@ -20,7 +20,7 @@ for entry in "${MODELS[@]}"; do
   curl -sL "$URL" -o "$MODEL"
   SIZE=$(wc -c < "$MODEL")
   if (( SIZE < 1000000 )); then
-    echo "error: $NAME too small ($SIZE bytes) — LFS pointer?" >&2
+    echo "error: $NAME too small ($SIZE bytes). LFS pointer?" >&2
     rm -f "$MODEL"
     exit 1
   fi

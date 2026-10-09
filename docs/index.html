@@ -34,10 +34,10 @@
     --surface: #2E2B25;
     --surface-2: #35322A;
     --ink: #EFEAE2;
-    --ink-70: rgba(239,234,226,0.72);
-    --ink-55: rgba(239,234,226,0.58);
-    --ink-40: rgba(239,234,226,0.40);
-    --ink-25: rgba(239,234,226,0.25);
+    --ink-70: rgba(239,234,226,0.90);
+    --ink-55: rgba(239,234,226,0.78);
+    --ink-40: rgba(239,234,226,0.78);
+    --ink-25: rgba(239,234,226,0.78);
     --line: rgba(239,234,226,0.10);
     --line-strong: rgba(239,234,226,0.18);
     --sage: #A8B5A0;
@@ -68,6 +68,11 @@
   ::selection { background: var(--amber-dim); color: var(--ink); }
   a { color: inherit; }
   img { max-width: 100%; display: block; }
+  :focus-visible {
+    outline: 2px solid var(--amber);
+    outline-offset: 3px;
+    box-shadow: 0 0 0 3px #24221E;
+  }
 
   .page { position: relative; overflow: hidden; }
   .atmo {
@@ -107,7 +112,13 @@
     padding: 9px 20px !important; border-radius: 999px;
   }
   .nav-cta:hover { background: #E3AD6C !important; }
-  @media (max-width: 720px) { .nav-links a:not(.nav-cta) { display: none; } }
+  @media (max-width: 860px) {
+    .hero-grid { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 720px) {
+    .nav-in { flex-wrap: wrap; align-items: flex-start; }
+    .nav-links { flex-wrap: wrap; margin-left: 0; width: 100%; }
+  }
 
   /* ============ hero ============ */
   .hero { padding: clamp(56px, 9vh, 96px) 0 clamp(40px, 6vh, 64px); }
@@ -235,7 +246,7 @@
   .try-input {
     width: 100%; background: var(--bg-deep); border: 1.5px solid var(--line-strong); border-radius: var(--r-md);
     color: var(--ink); font-family: var(--font-sans); font-size: 17px; padding: 15px 17px;
-    outline: none; transition: border-color .18s;
+    transition: border-color .18s;
   }
   .try-input:focus { border-color: var(--amber); }
   .try-input::placeholder { color: var(--ink-40); }
@@ -276,7 +287,7 @@
   @media (max-width: 860px) { .intent-grid { grid-template-columns: 1fr; } }
 
   /* ============ surfaces ============ */
-  .screen-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: clamp(18px, 2.6vw, 28px); }
+  .screen-duo { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: clamp(18px, 2.6vw, 28px); }
   .screen-card {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-lg);
     overflow: hidden; display: flex; flex-direction: column;
@@ -297,12 +308,12 @@
   .mcp-grid { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(24px, 3.4vw, 44px); align-items: start; }
   .tools-list { display: grid; gap: 8px; }
   .tool-row {
-    display: flex; align-items: baseline; gap: 13px;
+    display: flex; align-items: baseline; gap: 13px; flex-wrap: wrap;
     font-family: var(--font-mono); font-size: 13.5px;
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-sm);
     padding: 11px 15px;
   }
-  .tool-row .t { color: var(--amber); font-weight: 600; white-space: nowrap; }
+  .tool-row .t { color: var(--amber); font-weight: 600; overflow-wrap: anywhere; }
   .tool-row .d { color: var(--ink-55); font-size: 13px; }
   .tool-row.new { border-color: rgba(217,160,91,0.35); }
   .transcript-card {
@@ -325,7 +336,7 @@
   @media (max-width: 860px) { .mcp-grid { grid-template-columns: 1fr; } }
 
   /* ============ safety ============ */
-  .safety-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 14px; }
+  .safety-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); gap: 14px; }
   .safe-card {
     background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md);
     padding: 22px;
@@ -409,7 +420,7 @@
         </a>
       </div>
       <div class="hero-facts">
-        <span class="fact-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>9 MCP tools, agent-callable</span>
+        <span class="fact-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>MCP tools on /mcp</span>
         <span class="fact-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>Silhouette-only privacy</span>
         <span class="fact-chip"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.5l5 5 10-11"/></svg>Emergency dial: fail-closed off</span>
       </div>
@@ -663,7 +674,7 @@
       <h2>A real MCP server, agent-callable at runtime.</h2>
       <p class="sec-sub">
         Self-hosted inside the same FastAPI app at <b>/mcp</b> - Streamable HTTP per the
-        MCP spec 2025-11-25+ - exposing the care flow as <b>nine tools</b>. An in-repo MCP
+        MCP spec 2025-11-25+. An in-repo MCP
         client plays the Alexa+ agent and drives the ladder over real HTTP: initialize,
         tool calls, caregiver ack, outcome, done.
       </p>
@@ -689,7 +700,7 @@
         </div>
         <div class="transcript-body">
           <div class="tl req"><span class="who">→ initialize</span><span class="what">MCP Streamable HTTP · spec 2025-11-25+</span></div>
-          <div class="tl ok"><span class="who">← server</span><span class="what">Care Ladder · tools: 9</span></div>
+          <div class="tl ok"><span class="who">← server</span><span class="what">Care Ladder · tools returned</span></div>
           <div class="tl req"><span class="who">→ tools/call</span><span class="what">start_or_resume_incident {"cue_kind":"no_movement"}</span></div>
           <div class="tl ok"><span class="who">← result</span><span class="what">incident opened · rungs: reperceive → alexa_checkin → wait_window → …</span></div>
           <div class="tl req"><span class="who">→ tools/call</span><span class="what">notify_caretaker</span></div>
@@ -757,7 +768,7 @@
       </div>
     </div>
     <div class="foot-disclaimer">
-      <span class="mono">Wellness ladder — not a medical device.</span>
+      <span class="mono">Wellness ladder, not a medical device.</span>
       <span>Never calls emergency services on its own.</span>
       <span>Speaker, pager and dial channels are simulators in this build.</span>
     </div>

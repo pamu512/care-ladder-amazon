@@ -1,4 +1,4 @@
-# Care Ladder — product website
+# Care Ladder: product website
 
 Single-page product site for **[pamu512/care-ladder-amazon](https://github.com/pamu512/care-ladder-amazon)**
 (HEAD `b7c28d7` at build time, post A1-A4).
@@ -7,7 +7,7 @@ Single-page product site for **[pamu512/care-ladder-amazon](https://github.com/p
 
 ```
 website/
-├── index.html                        # the entire site — self-contained, no build step
+├── index.html                        # the entire site, self-contained, no build step
 └── assets/
     ├── firetv-allclear-1280.png      # production dashboard capture (all-clear state)
     ├── firetv-notify-1280.png        # production dashboard capture (needs-human state)
@@ -17,7 +17,7 @@ website/
 
 ## Open it
 
-Open `index.html` in any browser — double-click, or:
+Open `index.html` in any browser. Double-click, or:
 
 ```bash
 cd website
@@ -33,7 +33,7 @@ renders identically offline.
 
 | Claim | Source |
 |---|---|
-| 9 MCP tools incl. `caregiver_ack`, `caregiver_outcome` | `src/care_ladder/mcp_server/server.py` (9 `@mcp.tool`) |
+| MCP tools incl. `caregiver_ack`, `caregiver_outcome` | `src/care_ladder/mcp_server/server.py` (`@mcp.tool`) |
 | MCP spec 2025-11-25+, Streamable HTTP at `/mcp` | `server.py` docstring, README |
 | Notify = Alexa mobile inform card + countdown + 3 actions; Fire TV mirrors | `notify_caretaker`, `care_conversation.py`, TV copy "Family informed on Alexa mobile · this TV mirrors the trail" |
 | Resident classifier buckets clear_ok / needs_human / unclear | `channels/response_intent.py` |
@@ -48,8 +48,8 @@ renders identically offline.
 |---|---|
 | Headline / hero copy | `index.html` → `<header class="hero">` |
 | Rung descriptions | `#ladder` section, one `.rung` per rung |
-| Resident intent demo examples | `#resident .ex-chip` buttons (logic: `classifyResident()` — keep in sync with `response_intent.py`) |
-| Caregiver intent demo examples | `#caregiver .ex-chip` buttons (logic: `classifyCaregiver()` — keep in sync with `caregiver_intent.py`) |
+| Resident intent demo examples | `#resident .ex-chip` buttons (logic: `classifyResident()`, keep in sync with `response_intent.py`) |
+| Caregiver intent demo examples | `#caregiver .ex-chip` buttons (logic: `classifyCaregiver()`, keep in sync with `caregiver_intent.py`) |
 | MCP transcript | `#agent` → `.transcript-body` rows |
 | Screenshots | replace `assets/firetv-*.png` (re-capture at 1280×720 from `/firetv/`) |
 | Colors / spacing | `:root` CSS variables (Calm Care-Tech tokens) |

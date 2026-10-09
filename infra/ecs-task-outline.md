@@ -1,6 +1,6 @@
 # ECS / Fargate task outline (Care Ladder)
 
-Outline only — not executable CDK/Terraform. Use this when creating a task definition / service in the AWS console or IaC later. **No live cluster is assumed.**
+Outline only, not executable CDK/Terraform. Use this when creating a task definition / service in the AWS console or IaC later. **No live cluster is assumed.**
 
 ## Container image
 
@@ -12,7 +12,7 @@ Outline only — not executable CDK/Terraform. Use this when creating a task def
 | Container name | `care-ladder-api` |
 | Essential | `true` |
 
-Suggested image URI after push (placeholder — replace with your account/region/repo):
+Suggested image URI after push (placeholder: replace with your account/region/repo):
 
 `<account>.dkr.ecr.<region>.amazonaws.com/care-ladder:demo`
 
@@ -94,5 +94,5 @@ CMD-SHELL, curl -f http://localhost:8000/incidents || exit 1
 - [ ] Bucket public access **blocked**
 - [ ] Only blurred/silhouette clips uploaded
 - [ ] Plan YAML emergency `enabled: false` (fail-closed)
-- [ ] Contacts are reserved fiction or Secrets Manager–gated live grant — never real 911 in demo
+- [ ] Contacts are reserved fiction or Secrets Manager-gated live grant. Never real 911 in demo
 - [ ] No fabricated “production URL” in README or submission unless the service is actually up

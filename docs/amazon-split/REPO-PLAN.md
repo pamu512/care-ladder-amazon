@@ -1,4 +1,4 @@
-# REPO-PLAN — minimal `care-ladder-amazon`
+# REPO-PLAN: minimal `care-ladder-amazon`
 
 **Status:** Plan only. Do **not** create the GitHub repo or move code until Anoop says go.  
 **Authority tip:** `pamu512/opencv-care-ladder` branch `amazon/alexa-plus-fire-tv` @ `0fbfb111` (2026-09-28 22:51 UTC / **2026-09-29 06:51 HKT**). Mac may lag at `f6b74a6`; GitHub tip wins.  
@@ -55,7 +55,7 @@ These are the Amazon product + shared care-ladder spine needed to run the demo.
 
 | Path | Why |
 | --- | --- |
-| `src/care_ladder/` (entire package) | Ladder, MCP server (`mcp_server/`), Fire TV static (`api/static/firetv/`), channels, audit, privacy, plan loader, learning — required to run |
+| `src/care_ladder/` (entire package) | Ladder, MCP server (`mcp_server/`), Fire TV static (`api/static/firetv/`), channels, audit, privacy, plan loader, learning. Required to run |
 | `configs/amazon_demo_home.yaml` | Amazon demo household / rung order |
 | `configs/demo_home.yaml` | Keep for regression + before/after story; rename prominence in README to “legacy OpenCV plan” |
 | `tests/` Amazon + shared: `test_mcp_server.py`, `test_alexa_sim.py`, `test_amazon_*.py`, `test_firetv_app.py`, `test_response_intent.py`, `test_routine_profile.py`, `test_learning_api.py`, `test_detector_learning.py`, plus core ladder/API/privacy/orchestrator tests the Amazon paths depend on | Prove MCP + Fire TV + intent at runtime |
@@ -79,14 +79,14 @@ OpenCV vision stack is the **trigger**, not the Amazon track gate. Judges need i
 | Approach | Recommendation |
 | --- | --- |
 | **Vendor (preferred)** | Keep `src/care_ladder/vision/` **copied** into care-ladder-amazon as-is (already in package). No git submodule. Document: “vision cues vendored from opencv-care-ladder; Amazon work is MCP + Fire TV + rungs.” |
-| **Submodule** | Only if Anoop wants a hard split later. Adds clone friction for judges — **avoid for hackathon**. |
+| **Submodule** | Only if Anoop wants a hard split later. Adds clone friction for judges. **Avoid for hackathon**. |
 | **Models / clips** | Keep `scripts/download_models.sh`, `scripts/download_clips.sh`, `clips/README.md`. Do **not** commit large binaries; README points at download scripts. Demo fixtures that need synthetic frames still work without ONNX for Alexa path fixtures. |
 
-### 3C. LEAVE BEHIND — OpenCV-only (do not copy, or demote to `/archive` if history-imported)
+### 3C. LEAVE BEHIND: OpenCV-only (do not copy, or demote to `/archive` if history-imported)
 
 | Path / concern | Why stay OpenCV-only |
 | --- | --- |
-| `grant/` (if/when present on opencv main or filing pack) | OpenCV / AWS grant materials — not Amazon submission surface |
+| `grant/` (if/when present on opencv main or filing pack) | OpenCV / AWS grant materials, not Amazon submission surface |
 | OpenCV competition Devpost draft `docs/devpost-draft-opencv.md` | Wrong track narrative |
 | `docs/demo-video-script.md`, `docs/demo-script.md`, `docs/demo/care-ladder-demo.mp4` | OpenCV judge video assets |
 | `docs/technical-report.md`, `docs/eval-metrics.json`, `docs/competitive-landscape.md` (optional thin cite only) | OpenCV Agentic Vision judging pack |
@@ -123,14 +123,14 @@ care-ladder-amazon/
 
 ## 5. README structure that screams Alexa+ / Fire TV / MCP
 
-Order matters — judges skim.
+Order matters. Judges skim.
 
 1. **Title + badges:** Care Ladder · Alexa+ (primary) · Fire TV (supporting) · MCP Streamable HTTP  
 2. **One-liner:** Camera cue → multi-rung care ladder → Alexa+ agent (self-hosted MCP) → Fire TV caregiver audit (silhouette-only). Wellness ladder, not a medical device.  
 3. **Hackathon map (table):** Primary track Alexa+ · Supporting Fire TV · MCP spec 2025-11-25+ Streamable HTTP at `/mcp` · seven tools listed by name · AWS Builder mini: **not filed** (no Bedrock/AgentCore in-tree).  
 4. **Agentic proof (not thin MCP):** session state keyed by household+incident; tools `start_or_resume_incident` → `check_in_prompt` → `advance_rung` / `notify_caretaker` / `resolve_incident`; in-repo MCP **client** `alexa_sim.py`.  
 5. **Quickstart (≤60s to something on screen):** uvicorn + `/firetv/` + `python -m care_ladder.mcp_server.alexa_sim`.  
-6. **Demo paths:** soft OK / needs human / unclear / Path B occlusion — map to fixtures.  
+6. **Demo paths:** soft OK / needs human / unclear / Path B occlusion. Map to fixtures.  
 7. **Privacy & fail-closed:** silhouette; emergency off + hard lock; reserved `(555) 010-2276`.  
 8. **Friction log link** (bonus).  
 9. **Origins footnote:** significant in-window update of OpenCV Care Ladder (`opencv-care-ladder`); vision cues retained; OpenCV repo stays separate until after OpenCV judging.  
@@ -147,7 +147,7 @@ Do **not** lead with OpenCV DNN eval tables or grant language.
 3. On Devpost project https://devpost.com/software/care-ladder : replace GitHub field from `pamu512/opencv-care-ladder` (branch note) → `https://github.com/pamu512/care-ladder-amazon`.  
 4. Update in-repo `docs/devpost-draft-amazon.md` Links section to match.  
 5. Re-check Open Source mini fields if filing that mini: contribution/repo URL = new repo; describe in-window Amazon delta.  
-6. **Do not Final Submit** — leave draft until Anoop + video + friction completeness.  
+6. **Do not Final Submit.** Leave draft until Anoop + video + friction completeness.  
 7. If ever forced to stay private: add Amazon DR GitHub users (`chris-trag`, `knmeiss`, `giolaq`, `anishamalde`, `mosesroth`, `emersonsklar`) **at submit time** (invites expire 7 days).
 
 ---
@@ -162,10 +162,10 @@ Do **not** lead with OpenCV DNN eval tables or grant language.
 
 ## 8. Deploy / CI notes for the split
 
-- opencv CI deploys **only** on push to `main` — amazon branch does not burn the live OpenCV demo.  
+- opencv CI deploys **only** on push to `main`. The amazon branch does not burn the live OpenCV demo.  
 - New repo: either (a) no auto-deploy until Anoop wants a separate CloudFront, or (b) duplicate infra with a distinct hostname so OpenCV URL stays stable. Default: **CI = test-only** on care-ladder-amazon until explicitly approved.  
 - Restored: `.github/workflows/ci.yml` is test-only (`pytest`). Parked copy `docs/amazon-split/ci.yml.pending` removed.  
-- Live demo today: `https://d2u7pls4da2poz.cloudfront.net/` — document as “shared demo host from opencv stack” until a dedicated Amazon host exists; do not break OpenCV judges.
+- Live demo today: `https://d2u7pls4da2poz.cloudfront.net/`. Document as “shared demo host from opencv stack” until a dedicated Amazon host exists; do not break OpenCV judges.
 
 ---
 

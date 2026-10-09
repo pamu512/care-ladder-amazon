@@ -119,15 +119,15 @@ uses, drive D-pad/remote-equivalent keys, and record at 1280×720.
 
 | Expected | Actual |
 | --- | --- |
-| `/firetv/` on the shared CloudFront host | **404** `{"detail":"Not Found"}` — opencv stack has `/ui/` only. Video path is local. |
+| `/firetv/` on the shared CloudFront host | **404** `{"detail":"Not Found"}`. opencv stack has `/ui/` only. Video path is local. |
 | 1280×720 frame shows hero + rail + footer | Standby and occlusion fit. **Needs-human/notify overflows:** document ~787px vs a 720p window; footer (`Demo console`, wellness line) measured `visible: false`. |
 | D-pad moves a visible amber ring along cards/buttons | First keypress is required (load focus is `BODY`). Buttons get `.focused` + ring. **Hero / presence take programmatic focus with `outline: none` and no `.focused` class, so they show no ring** (`:focus-visible` does not match CDP/`el.focus()`). Spatial heuristic can skip visual left-to-right (ArrowDown from the hero landed on **Request call**, not **Acknowledge**). |
-| Remote Select / Enter activates the primary action | Enter on the focused **hero section** is a no-op. Emergency **Hold 3s** is `pointerdown` only — a D-pad Select never starts the hold. |
+| Remote Select / Enter activates the primary action | Enter on the focused **hero section** is a no-op. Emergency **Hold 3s** is `pointerdown` only. A D-pad Select never starts the hold. |
 | Silk hides `[hidden]` demo-console tool list | `.agent-tools { display: flex }` would win over the `hidden` attribute. In-tree fix: `[hidden] { display: none !important; }`. After toggle, computed display is `flex` and the seven `tools/list` names appear. Fonts are self-hosted woff2 (no Google runtime). |
 
 **Severity:** Medium for 720p notify clip + missing hero focus ring (video
 shots 3–6/9). Low for Silk `[hidden]` (already patched). High only if a
-judge expects a stick in-frame and we show a browser — Anoop owns that
+judge expects a stick in-frame and we show a browser. Anoop owns that
 hardware call.
 
 **Workaround:**
@@ -156,7 +156,7 @@ hardware call.
 
 ---
 
-## CloudFront / ALB `/mcp` — local-only MCP in the video - 2026-09-29
+## CloudFront / ALB `/mcp`: local-only MCP in the video - 2026-09-29
 
 **Task attempted:** Confirm whether the live demo host serves `/mcp` (and
 `/firetv/`) or whether the Alexa+ tape must stay on local uvicorn.
@@ -168,7 +168,7 @@ hardware call.
 | `https://d2u7pls4da2poz.cloudfront.net/` | 404 JSON |
 | `https://d2u7pls4da2poz.cloudfront.net/ui/` | **200** OpenCV console (~65 KB) |
 | `https://d2u7pls4da2poz.cloudfront.net/incidents` | **200** (opencv household incidents) |
-| `https://d2u7pls4da2poz.cloudfront.net/openapi.json` | **200**, 17 paths — **no `/mcp`, no `/firetv`** |
+| `https://d2u7pls4da2poz.cloudfront.net/openapi.json` | **200**, 17 paths. **no `/mcp`, no `/firetv`** |
 | `GET/POST …/mcp` and `POST …/mcp/` | **404** `{"detail":"Not Found"}` (`server: uvicorn`, `x-cache: Error from cloudfront`) |
 | `https://d2u7pls4da2poz.cloudfront.net/firetv/` | **404** |
 | ALB `http://care-ladder-demo-2017970097.us-east-1.elb.amazonaws.com/mcp` and `/firetv/` | **404** |
@@ -186,7 +186,7 @@ because prod never reaches the MCP app.
 pre-Amazon image.
 
 **Severity:** High for anyone who treats CloudFront as the Amazon demo
-(wrong story). Low for the planned tape — we already script local uvicorn.
+(wrong story). Low for the planned tape. We already script local uvicorn.
 
 **Workaround:** Video and README: **local-only MCP + Fire TV**.
 `alexa_sim --url http://127.0.0.1:8010` (this session: initialize +
@@ -233,7 +233,7 @@ the trailing-slash URL in the first Streamable HTTP client snippet.
 Burned time on the MCP test seam (optional surface).
 
 - `pyproject.toml` depends on **`httpx2>=2.0.0`**. `import httpx` is
-  `ModuleNotFoundError` — FastAPI 0.141 `TestClient` imports `httpx2`.
+  `ModuleNotFoundError`. FastAPI 0.141 `TestClient` imports `httpx2`.
 - `TestClient(app)` **without** the context manager hits `/mcp/` with
   `RuntimeError: Task group is not initialized. Make sure to use run().`
   (same lifespan bug as the mount).
@@ -287,7 +287,7 @@ pytest stay green with the flag default off.
 
 ---
 
-## Devpost “tool feedback” paste (draft — not submitted)
+## Devpost “tool feedback” paste (draft, not submitted)
 
 Anoop can paste this into the Devpost field. Full log is this file. Do
 **not** Final Submit from here.
@@ -295,7 +295,7 @@ Anoop can paste this into the Devpost field. Full log is this file. Do
 1. **mcp SDK v2:** `FastMCP` import is a hard miss; use `MCPServer`. Search
    should rank the v2 path over v1 examples.
 2. **ASGI mount lifespan:** mounted `streamable_http_app()` never runs
-   `session_manager.run()` — every `/mcp` call dies with “Task group is
+   `session_manager.run()`. Every `/mcp` call dies with “Task group is
    not initialized” until the parent FastAPI lifespan wraps it. Need a
    “mount inside another ASGI app” recipe.
 3. **DNS-rebinding 421:** default ON for localhost Hosts; TestClient and
@@ -304,11 +304,11 @@ Anoop can paste this into the Devpost field. Full log is this file. Do
    the mount. Document 421 next to the Streamable HTTP sample.
 4. **uvicorn/FastAPI `/mcp` → `/mcp/` 307:** raw POST without a trailing
    slash (or `curl -L`) looks dead. Client snippets should show `/mcp/`.
-5. **Fire TV / Silk:** no stick in this pass — recorded Chromium at
+5. **Fire TV / Silk:** no stick in this pass. Recorded Chromium at
    1280×720 (`http://127.0.0.1:8010/firetv/`). Notify/needs-human clips
    the footer at 720p. D-pad spatial focus skips ring on hero cards;
    emergency hold is pointer-only. Silk: `display:flex` beats `[hidden]`
    unless `display:none !important`; we vendored woff2.
-6. **CloudFront `/mcp` and `/firetv/`:** shared opencv host — both 404.
+6. **CloudFront `/mcp` and `/firetv/`:** shared opencv host. Both 404.
    **Local-only MCP in the video.** Do not send judges to
    `d2u7pls4da2poz.cloudfront.net/mcp`.
